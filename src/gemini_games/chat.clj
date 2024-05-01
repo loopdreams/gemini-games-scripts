@@ -1,4 +1,3 @@
-(require '[space-age.server :refer [app-state]])
 (require '[space-age.db :as db])
 (require '[clojure.string :as str])
 (import java.text.SimpleDateFormat)
@@ -7,6 +6,15 @@
 (def messages-per-page 10)
 (def root "/src/gemini_games/chat")
 
+(def banner
+  "```
+  ~~~~~~~~~~~
+  ~+-+-+-+-+~
+  ~|C|h|a|t|~
+  ~+-+-+-+-+~
+  ~~~~~~~~~~~\n```")
+ 
+
 (defn client-id [req]
   (-> req
       :client-cert
@@ -14,7 +22,7 @@
 
 (defn ok-response [body]
   {:status 20
-   :meta   "text/gemini; charset=utf-8"
+   :meta   "text/gemini; charset=utf-8" 
    :body body})
 
 (defn register-user []
@@ -23,13 +31,13 @@
 
 (defn register-name [req]
   (if (:query req)
-    (do (swap! app-state assoc-in [(client-id req) :user-name] (:query req))
+    (do (db/chat-register-user! (client-id req) (:query req))
         {:status 30 :meta root})
     {:status 10 :meta "Enter name"}))
 
 (defn write-message [req]
   (if (:query req)
-    (let [message {:username (:user-name (@app-state (client-id req)))
+    (let [message {:username (db/chat-get-username (client-id req))
                    :message (:query req)
                    :time (.format (SimpleDateFormat. "YYYY-MM-dd HH:mm:ss") (Date.))}]
       (db/chat-insert-message! message)
@@ -61,6 +69,7 @@
      (when (and (> total-messages messages-per-page)
                 (<= page-no (int (/ total-messages messages-per-page))))
        (str "\n\n=> " root "/page/" (inc page-no) " Next Page"))
+
      (when (not= page-no 1)
        (str "\n\n=> " root "/page/" (dec page-no) " Previous Page")))))
 
@@ -69,16 +78,15 @@
   (str "=> " root "/" name " " label))
 
 (defn homepage [req page-no]
-  (let [user (:user-name (@app-state (client-id req)))]
+  (let [user (db/chat-get-username (client-id req))]
     (->
-     (str "# Homepage \n\n"
+     (str banner
+          "\n\n"
           (if-not user
             (path-link "name" "Enter your name")
             (str "Hello " user "!\n\n"
                  (path-link "message" "Write a message")))
           "\n\n"
-          "---------------------------------------------\n"
-          "Chat History\n"
           "---------------------------------------------\n"
           (chat-history page-no))
      ok-response)))
