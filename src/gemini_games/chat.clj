@@ -1,4 +1,5 @@
 (require '[space-age.db :as db])
+(require '[space-age.responses :as r])
 (require '[clojure.string :as str])
 (import java.text.SimpleDateFormat)
 (import java.util.Date)
@@ -20,24 +21,19 @@
       :client-cert
       :sha256-hash))
 
-(defn ok-response [body]
-  {:status 20
-   :meta   "text/gemini; charset=utf-8" 
-   :body body})
-
 (defn register-user []
   {:status 60
    :meta "Please attach your client certificate"})
 
 (defn register-name [req]
   (if (:query req)
-    (do (db/chat-register-user! (client-id req) (:query req))
+    (do (db/register-user! (client-id req) (:query req))
         {:status 30 :meta root})
     {:status 10 :meta "Enter name"}))
 
 (defn write-message [req]
   (if (:query req)
-    (let [message {:username (db/chat-get-username (client-id req))
+    (let [message {:username (db/get-username (client-id req))
                    :message (:query req)
                    :time (.format (SimpleDateFormat. "YYYY-MM-dd HH:mm:ss") (Date.))}]
       (db/chat-insert-message! message)
@@ -78,18 +74,21 @@
   (str "=> " root "/" name " " label))
 
 (defn homepage [req page-no]
-  (let [user (db/chat-get-username (client-id req))]
-    (->
-     (str banner
-          "\n\n"
-          (if-not user
-            (path-link "name" "Enter your name")
-            (str "Hello " user "!\n\n"
-                 (path-link "message" "Write a message")))
-          "\n\n"
-          "---------------------------------------------\n"
-          (chat-history page-no))
-     ok-response)))
+  (let [user (db/get-username (client-id req))]
+    (->>
+     (str
+      "=> / Home"
+      "\n\n"
+      banner
+      "\n\n"
+      (if-not user
+        (path-link "name" "Enter your name")
+        (str "Hello " user "!\n\n"
+             (path-link "message" "Write a message")))
+      "\n\n"
+      "---------------------------------------------\n"
+      (chat-history page-no))
+     (r/success-response r/gemtext))))
         
 (defn main [req]
   (if-not (:client-cert req) (register-user)
@@ -99,4 +98,4 @@
               "page"    (homepage req (parse-long (second (:path-args req))))
               "name"    (register-name req)
               "message" (write-message req)
-              (ok-response "Nothing here")))))
+              (r/success-response r/gemtext "Nothing here")))))
