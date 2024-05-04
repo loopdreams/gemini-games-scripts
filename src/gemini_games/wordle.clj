@@ -7,7 +7,7 @@
 (def root "/src/gemini_games/wordle")
 (def guess-limit 6)
 (def break "\n\n")
-
+(defonce word-of-the-day (db/get-todays-word))
 
 (def instructions
   (str/join break
@@ -17,7 +17,6 @@
              "Unlike other versions of this game, this verion will not check whether the word is a valid word. For example, the guess 'abdce' will be accepted. However, only valid words are included in the word bank."
              "There will be a new word every day."]))
 
-(def word "apple")
 
 ;; Helper Functions
 
@@ -61,7 +60,7 @@
 ;; Guesses stored as a string in 'guesses' column. Guess and markers separated by ':' and
 ;; individual gusses seperated by ' ' e.g., "apple:xo--x pears:xo--x river:xxxxx"
 (defn store-guess [req input]
-  (let [word          word
+  (let [word          word-of-the-day
         guesses-state (db/get-guesses req)
         guess-markers (->> (calc-matches word input)
                            (apply str))
@@ -109,22 +108,11 @@
                (str/join "\n" (interleave board (repeat frames)))
                "```"])))
 
-(def test-scores [{:games/score 3 :games/win 1}
-                  {:games/score 6 :games/win 0}
-                  {:games/score 2 :games/win 1}
-                  {:games/score 3 :games/win 1}
-                  {:games/score 4 :games/win 1}
-                  {:games/score 4 :games/win 1}
-                  {:games/score 5 :games/win 1}
-                  {:games/score 3 :games/win 1}
-                  {:games/score 3 :games/win 1}
-                  {:games/score 3 :games/win 1}
-                  {:games/score 6 :games/win 0}
-                  {:games/score 3 :games/win 1}
-                  {:games/score 3 :games/win 1}])
+
 ;; User stats
 
 (def bar-symbol (char 9632))
+;; (def bar-symbol (char 9608))
 
 (defn bar-string [percentage count]
   (let [len (* 20 (/ percentage 100))]
@@ -139,8 +127,9 @@
       (bar-string percentage len))))
 
 
-(defn user-stats [stats]
-  (let [total-games (count stats)
+(defn user-stats [req]
+  (let [stats       (db/user-stats req)
+        total-games (count stats)
         wins        (filter #(= (:games/win %) 1) stats)
         win-count   (count wins)
         win-rate    (int (* 100 (/ win-count total-games)))
@@ -168,7 +157,7 @@
                           draw-board)
         guess-count   (db/get-score req)
         win-condition (db/win-condition req)
-        daily-word    word]
+        daily-word    word-of-the-day]
     (->>
      (str
       "# Wordle"
@@ -188,7 +177,7 @@
                (= win-condition 1)
                (str "You won " user "!\nIt took you " guess-count " guesses."
                     break
-                    (user-stats test-scores))
+                    (user-stats req))
 
                (= guess-limit guess-count)
                (str "Out of guesses! The word was " daily-word)

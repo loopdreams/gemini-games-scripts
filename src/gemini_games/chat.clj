@@ -60,7 +60,7 @@
 (defn path-link [name label]
   (str "=> " root "/" name " " label))
 
-(defn homepage [req page-no]
+(defn wordle-page [req page-no]
   (let [user (db/get-username req)]
     (->>
      (str
@@ -80,8 +80,8 @@
   (if-not (:client-cert req) (reg/register-user)
           (let [route (or (first (:path-args req)) "/")]
             (case route
-              "/"       (homepage req 1)
-              "page"    (homepage req (parse-long (second (:path-args req))))
+              "/"       (wordle-page req 1)
+              "page"    (wordle-page req (parse-long (second (:path-args req))))
               "name"    (reg/register-name req root)
               "message" (write-message req)
               (r/success-response r/gemtext "Nothing here")))))
