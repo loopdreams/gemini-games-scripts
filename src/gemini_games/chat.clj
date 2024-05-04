@@ -1,5 +1,6 @@
 (require '[space-age.db :as db])
 (require '[space-age.responses :as r])
+(require '[space-age.user-registration :as reg])
 (require '[clojure.string :as str])
 (import java.text.SimpleDateFormat)
 (import java.util.Date)
@@ -16,24 +17,10 @@
   ~~~~~~~~~~~\n```")
  
 
-(defn client-id [req]
-  (-> req
-      :client-cert
-      :sha256-hash))
-
-(defn register-user []
-  {:status 60
-   :meta "Please attach your client certificate"})
-
-(defn register-name [req]
-  (if (:query req)
-    (do (db/register-user! (client-id req) (:query req))
-        {:status 30 :meta root})
-    {:status 10 :meta "Enter name"}))
 
 (defn write-message [req]
   (if (:query req)
-    (let [message {:username (db/get-username (client-id req))
+    (let [message {:username (db/get-username req)
                    :message (:query req)
                    :time (.format (SimpleDateFormat. "YYYY-MM-dd HH:mm:ss") (Date.))}]
       (db/chat-insert-message! message)
@@ -74,12 +61,11 @@
   (str "=> " root "/" name " " label))
 
 (defn homepage [req page-no]
-  (let [user (db/get-username (client-id req))]
+  (let [user (db/get-username req)]
     (->>
      (str
-      "=> / Home"
-      "\n\n"
-      banner
+      "# Chat"
+      "\n\n=> / Home"
       "\n\n"
       (if-not user
         (path-link "name" "Enter your name")
@@ -91,11 +77,11 @@
      (r/success-response r/gemtext))))
         
 (defn main [req]
-  (if-not (:client-cert req) (register-user)
+  (if-not (:client-cert req) (reg/register-user)
           (let [route (or (first (:path-args req)) "/")]
             (case route
               "/"       (homepage req 1)
               "page"    (homepage req (parse-long (second (:path-args req))))
-              "name"    (register-name req)
+              "name"    (reg/register-name req root)
               "message" (write-message req)
               (r/success-response r/gemtext "Nothing here")))))
