@@ -6,10 +6,13 @@
 (def root "/src/gemini_games/tic_tac_toe")
 (def break "\n\n")
 
-(def x (char 9813))
-(def o (char 9819))
+(def x-marker (char 9813))
+(def o-marker (char 9819))
 
-(def test-board [["o" "o" "-"] ["o" "o" "o"] ["x" "o" "o"]])
+(def default-board [["-" "-" "-"]
+                    ["-" "-" "-"]
+                    ["-" "-" "-"]])
+
 (def blank-marker "-")
 
 ;; Game logic
@@ -37,11 +40,23 @@
       (diagonals board)
       (verticals board)))
 
+(defn pack-board
+  "For storing in sql row. Cell separators are ':' and row separators are ' '"
+  [board]
+  (->> (map #(str/join ":" %) board)
+      (str/join " ")))
 
-(defn update-board [board [x y] player]
-  (let [marker (if (= player :white) x o)]
-    (->> (assoc (nth board y) x marker)
-         (assoc board y))))
+(defn unpack-board [board-str]
+  (->>
+   (str/split board-str #" ")
+   (map #(str/split % #":"))))
+
+(defn update-board [board [x y] player gameid]
+  (let [marker    (if (= player :white) x-marker o-marker)
+        board     (into [] board)
+        new-board (->> (assoc (nth board y) x marker)
+                       (assoc board y))]
+    (db/update-board! gameid (pack-board new-board))))
 
 ;; Input parsing
 (defn free-space? [board [x y]]
@@ -51,24 +66,26 @@
   "If nil, input is invalid"
   [input]
   (let [remove-blanks (str/replace input #" " "")
-        row           (parse-long (re-find #"\d" remove-blanks))
+        row           (re-find #"\d" remove-blanks)
+        row           (when row (parse-long row))
         col           (re-find #"[abc]" (str/lower-case remove-blanks))]
-    (when (and col (<= 1 row 3))
+    (when (and col row (<= 1 row 3))
       (let [col-idx (case col
                       "a" 0
                       "b" 1
-                      "c" 2)
+                      "c" 2
+                      nil)
             row-idx (dec row)]
         [col-idx row-idx]))))
   
 
 (comment
-  (get-row-col-input "1c")
-  (free-space? test-board [2 0]))
+  (get-row-col-input "a2")
+  (free-space? default-board [0 1]))
 
-;; TODO player/marker logic
-(defn play-turn [req board]
-  (let [gameid (second (:path-args req))
+;; Turn logic
+(defn play-turn [req gameid]
+  (let [board (-> (db/get-gameinfo gameid) first :games/boardstate unpack-board)
         player (db/get-player-type req gameid)]
     (if-not (:query req)
       {:status 10 :meta "Enter coordinates"}
@@ -80,12 +97,14 @@
           (if-not (free-space? board input)
             {:status 10 :meta "This space is not free, please try again"}
 
-            (do (update-board board input player)
-                {:status 30 :meta root})))))))
+            (do
+              (update-board board input player gameid)
+              {:status 30 :meta (str root "/game/" gameid)})))))))
 
-(comment
-  (play-turn {:query "c1"} test-board))
 
+;; Make board
+(defn make-board [board-str]
+  (unpack-board board-str))
 
 (defn draw-board [rows]
   (let [x-border ["a" "b" "c"]
@@ -104,8 +123,6 @@
               x-border-format
               "\n")
          "\n```")))
-
-
 
 
 (defn game-summary [game-info]
@@ -142,10 +159,6 @@
       break)
      (r/success-response r/gemtext))))
 
-                   
-
-
-
 
 ;; Starting a game
 (defn init-game [req colour]
@@ -153,7 +166,12 @@
                    str
                    (subs 0 8))
         c (if (= colour "white") :whiteID :blackID)]
-    (do (db/init-game req "XXXXX" c gameid)
+    (do (db/init-game req (pack-board default-board) c gameid)
+        {:status 30 :meta (str root "/game/" gameid)})))
+
+(defn join-game [req gameid colour]
+  (let [c (if (= colour "white") :whiteID :blackID)]
+    (do (db/player-join req gameid c)
         {:status 30 :meta (str root "/game/" gameid)})))
 
 (defn start-game-page [req]
@@ -172,12 +190,35 @@
 
 ;; Playing a game
 (defn game-page [req gameid]
-  (->>
-   (str gameid break
-        (draw-board [["-" "-" "-"]
-                     ["-" "-" "-"]
-                     ["-" "-" "-"]]))
-   (r/success-response r/gemtext)))
+  (let [{:games/keys [whiteID
+                      blackID
+                      playerturn
+                      startdate
+                      startedby
+                      boardstate
+                      complete
+                      winner]} (first (db/get-gameinfo gameid))
+        user (fn [id] (db/get-username-by-id id))
+        user-colour (if (= (db/client-id req) whiteID) "white" "black")]
+    (->>
+     (str
+      "# Game " gameid
+      break
+      "Started by " (user startedby) " on " startdate
+      break
+      (-> boardstate make-board draw-board)
+      break
+      (if (= complete 1)
+        (str (user winner) " has won!")
+        (cond
+          (and (or (not whiteID) (not blackID)) (= startedby (db/client-id req))) "Waiting for other player to join."
+          (not whiteID) (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
+          (not blackID) (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
+          (= playerturn user-colour) (str "It's your turn\n"
+                                          "=> " root "/play-turn/" gameid " Play turn")
+          :else (str playerturn "'s turn."))))
+     
+     (r/success-response r/gemtext))))
 
 ;; Main Page
 (defn main-page [req]
@@ -202,5 +243,7 @@
         "name"         (reg/register-name req root)
         "active-games" (active-games req)
         "start-game"   (start-game-page req)
+        "join-game"    (join-game req (second (:path-args req)) (last (:path-args req)))
+        "play-turn"    (play-turn req (second (:path-args req)))
         "game"         (game-page req (second (:path-args req)))
         (r/success-response r/gemtext "Nothing here")))))
