@@ -3,7 +3,7 @@
 (require '[space-age.user-registration :as reg])
 (require '[clojure.string :as str])
 
-(def root "/src/gemini_games/tic_tac_toe")
+(def root "/src/app/tic_tac_toe")
 (def break "\n\n")
 
 (def x-marker (char 9813))

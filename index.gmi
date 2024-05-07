@@ -1,0 +1,7 @@
+# Gemini Games
+
+
+=> src/app/user Register your name
+=> src/app/chat Chat
+=> src/app/wordle Wordle
+=> src/app/tic_tac_toe Tic Tac Toe

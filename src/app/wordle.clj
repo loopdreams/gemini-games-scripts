@@ -4,7 +4,7 @@
 (require '[clojure.string :as str])
 (require '[clojure.set :as set])
 
-(def root "/src/gemini_games/wordle")
+(def root "/src/app/wordle")
 (def guess-limit 6)
 (def break "\n\n")
 (defonce word-of-the-day (db/get-todays-word))

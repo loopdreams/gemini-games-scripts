@@ -6,7 +6,7 @@
 (import java.util.Date)
 
 (def messages-per-page 10)
-(def root "/src/gemini_games/chat")
+(def root "/src/app/chat")
 
 (def banner
   "```

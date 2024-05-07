@@ -2,7 +2,7 @@
 (require '[space-age.responses :as r])
 (require '[space-age.user-registration :as reg])
 
-(def root "/src/gemini_games/user")
+(def root "/src/app/user")
 
 (defn user-page [req]
   (let [user (db/get-username req)]
