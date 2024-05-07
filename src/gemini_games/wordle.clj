@@ -31,6 +31,9 @@
          count
          (= 5))))
 
+(defn validate-word [guess]
+  (db/valid-words (str/lower-case guess)))
+
 (defn win? [guesses]
   (when (seq guesses)
     (->>
@@ -78,8 +81,11 @@
       (if-not (validate-guess guess)
         {:status 10 :meta "Incorrect input, please enter 5 letters only"}
 
-        (do (store-guess req (:query req))
-            {:status 30 :meta root}))
+        (if-not (validate-word guess)
+          {:status 10 :meta (str guess " is not a valid word, please try again.")}
+
+          (do (store-guess req (:query req))
+              {:status 30 :meta root})))
         
       {:status 10 :meta "Enter guess"})))
 
