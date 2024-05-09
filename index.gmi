@@ -1,7 +1,11 @@
 # Gemini Games
 
 
-=> src/app/user Register your name
+=> src/app/user User Page (Register Name & View History)
+
+## Games
 => src/app/chat Chat
 => src/app/wordle Wordle
 => src/app/tic_tac_toe Tic Tac Toe
+
+## Other Services
