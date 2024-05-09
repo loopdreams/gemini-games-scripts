@@ -14,9 +14,7 @@
             ["## Instructions"
              "The aim of the game is to guess a five letter word is as little tries as possible."
              "After each guess, there will be indicators for each letter showing whether the letter was correct and in the right position ('x'), whether the letter was right but in the wrong position ('o') or whether the letter was incorrect ('-')."
-             "Unlike other versions of this game, this verion will not check whether the word is a valid word. For example, the guess 'abdce' will be accepted. However, only valid words are included in the word bank."
              "There will be a new word every day."]))
-
 
 ;; Helper Functions
 
@@ -34,7 +32,7 @@
 (defn validate-word [guess]
   (db/valid-words (str/lower-case guess)))
 
-(defn win? [guesses]
+(defn winner? [guesses]
   (when (seq guesses)
     (->>
      (last (str/split guesses #":"))
@@ -69,7 +67,7 @@
                            (apply str))
         new-guesses   (str (when guesses-state (str guesses-state " "))
                            input ":" guess-markers)
-        win-condition (win? new-guesses)]
+        win-condition (winner? new-guesses)]
     (db/insert-guess! req new-guesses)
     (when win-condition
       (db/update-win-condition! req))))
@@ -136,10 +134,10 @@
 (defn user-stats [req]
   (let [stats       (db/user-stats req)
         total-games (count stats)
-        wins        (filter #(= (:games/win %) 1) stats)
+        wins        (filter #(= (:wordlegames/win %) 1) stats)
         win-count   (count wins)
         win-rate    (int (* 100 (/ win-count total-games)))
-        scores      (->> (map :games/score wins)
+        scores      (->> (map :wordlegames/score wins)
                          frequencies
                          (sort-by second)
                          reverse
