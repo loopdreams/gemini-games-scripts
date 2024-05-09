@@ -113,46 +113,6 @@
                "```"])))
 
 
-;; User stats
-
-(def bar-symbol (char 9632))
-;; (def bar-symbol (char 9608))
-
-(defn bar-string [percentage count]
-  (let [len (* 20 (/ percentage 100))]
-    (str "[" (str/join (repeat len bar-symbol)) "] " count)))
-
-(defn stats-bars [win-frequencies]
-  (let [[[_ full]] win-frequencies]
-    (for [i (range 1 (inc guess-limit))
-          :let [[_ len] (or (first (filter #(= (first %) i) win-frequencies))
-                            [i 0])
-                percentage (* 100 (/ len full))]]
-      (bar-string percentage len))))
-
-
-(defn user-stats [req]
-  (let [stats       (db/user-stats req)
-        total-games (count stats)
-        wins        (filter #(= (:wordlegames/win %) 1) stats)
-        win-count   (count wins)
-        win-rate    (int (* 100 (/ win-count total-games)))
-        scores      (->> (map :wordlegames/score wins)
-                         frequencies
-                         (sort-by second)
-                         reverse
-                         stats-bars
-                         (str/join "\n"))]
-                        
-    (str "Total games played: " total-games "\n"
-         "Win rate: " win-rate "%\n"
-         "```\n"
-         "---------------------\n"
-         scores
-         "\n---------------------"
-         "\n```")))
-
-
 ;; Page
 (defn wordle-page [req]
   (let [user          (db/get-username req)
@@ -181,7 +141,7 @@
                (= win-condition 1)
                (str "You won " user "!\nIt took you " guess-count " guesses."
                     break
-                    (user-stats req))
+                    (reg/wordle-stats req))
 
                (= guess-limit guess-count)
                (str "Out of guesses! The word was " daily-word)
