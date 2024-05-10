@@ -1,4 +1,2 @@
 {:paths ["src"]
- :deps  {}
- :aliases 
- {:neil {:project {:name gemini-games/gemini-games}}}}
+ :deps  {}}
