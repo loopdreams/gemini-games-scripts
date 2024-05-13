@@ -3,12 +3,18 @@
 (require '[clojure.string :as str])
 
 (def root "/src/app/flights")
+(def break "\n\n")
+
+(def instructions-text (slurp "static/partials/instructions_flights"))
+(def about-text (slurp "static/partials/about_flights"))
+
+
 ;; TODO add options to query cities/airports
 
 ;; TODO proper parsing and validation
 (defn parse-query [q]
   (->>
-   (str/split q #" and ")
+   (str/split q #"\;")
    (map str/trim)))
 
 (defn flight-data [req]
@@ -23,19 +29,25 @@
         msg (f/flight-message [from to])]
     (->>
 
-     (str
-      "# Flight Info\n\n"
-      (str "=> " root " Back\n\n")
-      "```"
-      msg
-      "\n```")
+     (str/join
+      break
+      ["# Flight Info"
+       (str "=> " root " Flights")
+       (str "=> " root "/query New Query")
+       "```"
+       msg
+       "```"])
      (r/success-response r/gemtext))))
 
-;; TODO add details
 (defn splash-page []
   (->>
-   (str "# Flight Info\n\n"
-        (str "=> " root "/query Query"))
+   (str/join
+    break
+    ["# Flight Info"
+     (str "=> " "/ Home")
+     (str "=> " root "/query Query")
+     instructions-text
+     about-text])
    (r/success-response r/gemtext)))
 
 (defn main [req]
