@@ -9,6 +9,26 @@
 (def break "\n\n")
 (defonce word-of-the-day (db/get-todays-word))
 
+(def default-letters "qwertyuiop asdfghjkl  zxcvbnm")
+
+;; Keyboard logic
+(defn drop-letter [keyb drop]
+  (if (re-find (re-pattern drop) keyb)
+    (let [pos (.indexOf keyb drop)]
+      (str (subs keyb 0 pos) "_" (subs keyb (inc pos))))
+    keyb))
+
+
+(defn drop-letters [keyb letters]
+  (reduce #(drop-letter %1 %2)
+          keyb
+          letters))
+
+(defn keyboard [letters]
+  (->> (partition-all 10 (seq letters))
+       (map #(str/join " " %))
+       (str/join "\n")))
+
 (def instructions
   (str/join break
             ["## Instructions"
@@ -56,21 +76,31 @@
           (recur gss (assoc result count "o") (inc count))
           (recur gss result (inc count)))))))
 
+(defn incorrect-letters [word guess]
+  (mapv str (set/difference (set guess) (set word))))
 
 
 ;; Guesses stored as a string in 'guesses' column. Guess and markers separated by ':' and
 ;; individual gusses seperated by ' ' e.g., "apple:xo--x pears:xo--x river:xxxxx"
 (defn store-guess [req input]
-  (let [word          word-of-the-day
-        guesses-state (db/get-guesses req)
-        guess-markers (->> (calc-matches word input)
-                           (apply str))
-        new-guesses   (str (when guesses-state (str guesses-state " "))
-                           input ":" guess-markers)
-        win-condition (winner? new-guesses)]
+  (let [word             word-of-the-day
+        guesses-state    (db/get-guesses req)
+        guess-markers    (->> (calc-matches word input)
+                              (apply str))
+        new-guesses      (str (when guesses-state (str guesses-state " "))
+                              input ":" guess-markers)
+
+        current-keyboard (or (db/get-keyboard req) default-letters)
+        new-keyboard     (->> (incorrect-letters word input)
+                              (drop-letters current-keyboard))
+
+        win-condition    (winner? new-guesses)]
+    ;; TODO find better place to init keyboard
     (db/insert-guess! req new-guesses)
+    (db/update-keyboard! req new-keyboard)
     (when win-condition
       (db/update-win-condition! req))))
+
 
 ;; Guess handler
 (defn make-guess [req]
@@ -107,21 +137,21 @@
 (defn draw-board [board]
   (let [frames "---------------------"]
     (str/join "\n"
-              ["```"
-               frames
-               (str/join "\n" (interleave board (repeat frames)))
-               "```"])))
+              [frames
+               (str/join "\n" (interleave board (repeat frames)))])))
 
 
 ;; Page
 (defn wordle-page [req]
-  (let [user          (db/get-username req)
-        board         (-> (db/get-guesses req)
-                          make-board
-                          draw-board)
-        guess-count   (db/get-score req)
-        win-condition (db/win-condition req)
-        daily-word    word-of-the-day]
+  (let [user           (db/get-username req)
+        board          (-> (db/get-guesses req)
+                           make-board
+                           draw-board)
+        keyboard-state (-> (or (db/get-keyboard req) default-letters)
+                           keyboard)
+        guess-count    (db/get-score req)
+        win-condition  (db/win-condition req)
+        daily-word     word-of-the-day]
     (->>
      (str
       "# Wordle"
@@ -149,7 +179,11 @@
                :else (path-link "guess" "Make a guess"))))
 
       break
+      "```\n"
+      keyboard-state
+      break
       board
+      "\n```"
       break
       instructions)
 
