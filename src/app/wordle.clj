@@ -3,6 +3,7 @@
 (require '[space-age.user-registration :as reg])
 (require '[clojure.string :as str])
 (require '[clojure.set :as set])
+(require '[java-time.api :as jt])
 
 (def root "/src/app/wordle")
 (def guess-limit 6)
@@ -30,13 +31,20 @@
        (str/join "\n")))
 
 (def instructions
-  (str/join break
-            ["## Instructions"
-             "The aim of the game is to guess a five letter word is as little tries as possible."
-             "After each guess, there will be indicators for each letter showing whether the letter was correct and in the right position ('x'), whether the letter was right but in the wrong position ('o') or whether the letter was incorrect ('-')."
-             "There will be a new word every day."]))
+  (slurp "static/partials/instructions_wordle"))
 
 ;; Helper Functions
+
+(defn time-until-next-word []
+  (let [[hrs mins :as x] (map parse-long
+                              (-> (jt/format "HH mm" (jt/local-date-time))
+                                  (str/split #" ")))]
+    (if (> mins 0)
+      (let [mins-remaining (- 60 mins)
+            hrs-remaining (- 24 (inc hrs))]
+        (str "- " hrs-remaining ":" mins-remaining " until next word."))
+      (str "- " (- 24 hrs) " until next word."))))
+
 
 (defn path-link [name label]
   (str "=> " root "/" name " " label))
@@ -158,13 +166,13 @@
       break
       "=> / Home"
       break
-      "This is a gemini clone of the well-known game Wordle. Some brief instructions are below."
+      "This is a gemini clone of the well-known game Wordle."
       break
 
       (if-not user
         (path-link "name" "Enter your name")
 
-        (str "Logged in as " user
+        (str "Hi " user
              break
 
              (cond
@@ -174,7 +182,7 @@
                     (reg/wordle-stats req))
 
                (= guess-limit guess-count)
-               (str "Out of guesses! The word was " daily-word)
+               (str "Out of guesses! The word was: " daily-word)
 
                :else (path-link "guess" "Make a guess"))))
 
@@ -185,7 +193,9 @@
       board
       "\n```"
       break
-      instructions)
+      instructions
+      break
+      (time-until-next-word))
 
      (r/success-response r/gemtext))))
 
