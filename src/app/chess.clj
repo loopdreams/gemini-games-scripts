@@ -148,8 +148,8 @@
 ;; - DONE Knight
 ;; - WAIT King
 ;; - DONE Queen
-;; - TODO Castling
-;; - TODO Promotion
+;; - DONE Castling
+;; - CANCELLED Promotion (covered in pawn validation)
 
 
 (defn player-pieces [turn]
@@ -261,8 +261,6 @@
       "TODO handle castling board update")))
            
 
-
-
 (comment
   (valid-move-R {:board (-> (update-square blank-board [0 0] "R")
                             (update-square [0 1] "p"))
@@ -278,6 +276,38 @@
 ;; TODO Castling
 ;; TODO New pieces
 
+;; Check
+(defn check-detection [board turn]
+  (let [to (first (board-lookup-type board (if (= turn :white) black-K-alt white-K-alt)))
+        player-pieces (reduce (fn [result piece]
+                                (into result (board-lookup-type board piece)))
+                              []
+                              (if (= turn :white) white-pieces black-pieces))]
+    (loop [[p & pieces] player-pieces
+           check nil]
+      (println check)
+      (if-not check
+        (when p
+          (recur pieces
+                 (let [valid-m-fn (case (str/lower-case (board-lookup board p))
+                                    "k" valid-move-K
+                                    "q" valid-move-Q
+                                    "b" valid-move-B
+                                    "r" valid-move-R
+                                    "n" valid-move-N
+                                    "p" valid-move-P)]
+                   (when (valid-m-fn {:board board :from p :to to :turn turn})
+                     p))))
+        check))))
+
+(comment
+  (check-detection
+
+   (-> blank-board
+       (update-square [0 3] "K")
+       (update-square [1 2] "b"))
+   :white)
+  (check-detection default-board-alt :white))
 
 (comment
   (draw-board
@@ -350,6 +380,7 @@
        (if (= turn :white)
          (str/lower-case piece)
          piece)))
+
   
 (defn construct-move-from [{:keys [board turn piece to] :as move}]
   (if (:from move) move
