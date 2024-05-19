@@ -121,6 +121,8 @@
 ;; - DONE Knight
 ;; - WAIT King
 ;; - DONE Queen
+;; - TODO Castling
+;; - TODO Promotion
 
 
 (defn player-pieces [turn]
@@ -239,7 +241,70 @@
                                     :capture false})))
 
 ;; Input Handling
+;; Algebraic notation:
+;; - Nc6
+;; - Nxc6
+;; - c5 (for pawn)
+;; - exd5 (pawn capture)
+;; Long Algebraic notation:
+;; - e2e4
+;; - Rd3xd7
 
+(defn valid-input? [input]
+  (and (re-find #"[a-zA-Z]" (str (first input)))
+       (re-find #"\d" (str (last input)))))
+
+(defn rank-file->coords [[rank file]]
+  [(- (int rank) 97) (- 8 (- (int file) 48))])
+
+(defn construct-move-from [move]
+  move)
+
+(defn constuct-piece-from [move]
+  (if (:to move) move
+      move))
+
+(defn lookup-letter [letter]
+  (case (str/lower-case letter)
+    "k" :king
+    "q" :queen
+    "b" :bishop
+    "r" :rook
+    "n" :knight
+    "p" :pawn))
+
+(defn parse-input [input move]
+  (let [input (str/replace input #"[^a-zA-Z\d]" "")]
+    (when (valid-input? input)
+      (cond
+        (= 2 (count input))
+        (construct-move-from (-> (assoc move :piece :pawn)
+                                 (assoc :to (rank-file->coords input))))
+
+        (= 3 (count input))
+        (let [to     (rank-file->coords (subs input 1 3))
+              update (fn [piece] (-> (assoc move :piece piece)
+                                     (assoc :to to)))]
+          (construct-move-from (update (lookup-letter (first input)))))
+
+        (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
+        (parse-input (str (subs input 0 1) (subs input 2)) move)
+
+        (= 4 (count input))
+        (let [from (rank-file->coords (subs input 0 2))
+              to   (rank-file->coords (subs input 2 4))]
+          (constuct-piece-from (-> (assoc move :from from)
+                                   (assoc :to to))))
+
+        (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
+        (parse-input (str (subs input 0 2) (subs input 3)) move)
+
+        (= 5 (count input))
+        (parse-input (str (rest input)) (assoc move :piece (lookup-letter (first input))))
+
+        (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
+        (parse-input (str (subs input 0 3) (subs input 4)) move)
+        :else nil))))
 
 
 ;; Turn logic
