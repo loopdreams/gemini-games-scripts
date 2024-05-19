@@ -114,6 +114,33 @@
     (-> (update-square board from)
         (update-square to piece))))
 
+(defn pack-board
+  "Queries db and adds current board state to previous states.
+  row-separator \":\"
+  col-separator \" \"
+  board-separator \"_\" "
+  [board]
+  (let [history "TODO"]
+    (str history "_"
+         (str/join " "
+                   (for [row board]
+                     (str/join ":" row))))))
+
+(defn unpack-board [board]
+  (->> (str/split board #" ")
+       (mapv #(str/split % #":"))))
+
+(defn unpack-history []
+  (let [history (pack-board default-board-alt)
+        boards (str/split history #"_")]
+    (map unpack-board boards)))
+
+(defn get-board-state
+  ([] (last (unpack-history)))
+  ([n] (let [history (unpack-history)]
+         (when (< n (count history))
+           (nth history n)))))
+
 ;; Valid moves for:
 ;; - DONE Pawn
 ;; - DONE Rook
@@ -214,6 +241,25 @@
               (and (= 1 (abs (- y2 y1))) (= x2 x1))
               (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))
       (valid-to (partial board-lookup board) to turn))))
+
+(defn valid-move-castle [{:keys [board turn castling]}]
+  (let [rx1      (if (= castling :kingside) 7 0)
+        ry1      (if (= turn :white) 7 0)
+        rook     [rx1 ry1]
+        new-rook [(if (= castling :kingside) 5 3) ry1]
+        king     [4 ry1]
+        new-king [(if (= castling :kingside) 6 2) ry1]
+        history  (unpack-history)
+        lookup   (partial board-lookup board)]
+    (when (and (= blank-marker (lookup new-king))
+               (= blank-marker (lookup new-rook))
+               ;; checking if pieces have moved previously:
+               (every? #(= (if (= turn :white) white-R-alt black-R-alt) %)
+                       (map #(board-lookup % rook) history))
+               (every? #(= (if (= turn :white) white-K-alt black-K-alt) %)
+                       (map #(board-lookup % king) history)))
+      "TODO handle castling board update")))
+           
 
 
 
@@ -394,10 +440,10 @@
 
 (comment
   (parse-input "f8Q" {:board default-board-alt :turn :white})
-  (parse-input "a8=Q" {:board}
-                     (-> blank-board
-                         (update-board {:from [0 1] :to [0 1] :piece "p"}))
-                     :turn :white))
+  (parse-input "a8=Q" {:board
+                       (-> blank-board
+                           (update-board {:from [0 1] :to [0 1] :piece "p"}))
+                       :turn :white}))
 
 ;; Turn logic
 
