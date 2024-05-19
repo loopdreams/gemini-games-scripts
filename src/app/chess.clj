@@ -250,21 +250,80 @@
 ;; - e2e4
 ;; - Rd3xd7
 
-(defn valid-input? [input]
+(defn valid-input-string? [input]
   (and (re-find #"[a-zA-Z]" (str (first input)))
-       (re-find #"\d" (str (last input)))))
+       (or (re-find #"\d" (str (last input)))
+           (re-find #"[qkbrn]" (str/lower-case (last input))))))
 
 (defn rank-file->coords [[rank file]]
   [(- (int rank) 97) (- 8 (- (int file) 48))])
 
-(defn construct-move-from [move]
-  move)
+(defn construct-move-from-pawn
+  "For pawn input"
+  [{:keys [board turn to] :as move}]
+  (if (:from move) move
+      ;; Pawn lookup
+      (let [[x2 y2]      to
+            direction    (if (= turn :white) + -)
+            target-piece (if (= turn :white) white-P-alt black-P-alt) ;; looking backward
+            lookup       (partial board-lookup board)]
+        (if (= blank-marker (board-lookup board to))
+          (cond
+            (= (lookup [x2 (direction y2 1)]) target-piece)
+            (assoc move :from [x2 (direction y2 1)])
+            (= (lookup [x2 (direction y2 2)]) target-piece)
+            (assoc move :from [x2 (direction y2 2)])
+            :else nil)
+          (let [diag-l [(dec x2) (direction y2 1)]
+                diag-r [(inc x2) (direction y2 1)]]
+            (cond
+              (and (= (lookup diag-l) target-piece) (= (lookup diag-r) target-piece))
+              "TODO Disambiguation step"
+              (= (lookup diag-l) target-piece) (assoc move :from diag-l)
+              (= (lookup diag-r) target-piece) (assoc move :from diag-r)
+              :else                            nil))))))
 
-(defn constuct-piece-from [move]
-  (if (:to move) move
-      move))
+(defn board-lookup-type [board type]
+  (->>
+   (for [i (range 8)
+         :let [row (map-indexed vector (nth board i))
+               filtered (filter #(= (second %) type) row)]
+         :when (seq filtered)]
+     (interleave (map first filtered) (repeat i)))
+   flatten
+   (partition-all 2)))
 
-(defn lookup-letter [letter]
+(defn type-keyword-lookup [kw turn]
+  (let [piece (case kw
+                :king "K"
+                :queen "Q"
+                :rook "R"
+                :bishop "B"
+                :knight "N"
+                :pawn "P")]
+       (if (= turn :white)
+         (str/lower-case piece)
+         piece)))
+  
+(defn construct-move-from [{:keys [board turn piece to] :as move}]
+  (if (:from move) move
+      (if (= piece :pawn) (construct-move-from-pawn move)
+          (let [pos        (board-lookup-type board (type-keyword-lookup piece turn))
+                valid-m-fn (case piece
+                             :king   valid-move-K
+                             :queen  valid-move-Q
+                             :bishop valid-move-B
+                             :rook   valid-move-R
+                             :knight valid-move-N
+                             :pawn   valid-move-P)
+                pos-f      (filter #(valid-m-fn (assoc move :from %)) pos)]
+            (if (> (count pos-f) 1) "TODO Disambiguation step"
+                (assoc move :from (into [] (first pos-f))))))))
+          
+(defn constuct-piece-from [{:keys [board from] :as move}]
+  (assoc move :piece (board-lookup board from)))
+
+(defn lookup-piece [letter]
   (case (str/lower-case letter)
     "k" :king
     "q" :queen
@@ -273,39 +332,72 @@
     "n" :knight
     "p" :pawn))
 
+(defn castling? [input]
+  (some #{input} ["00" "OO" "000" "OOO"]))
+
+(defn castling-side [input]
+  (case input
+    "00" :kingside
+    "OO" :kingside
+    "000" :queenside
+    "OOO" :queenside))
+
 (defn parse-input [input move]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
-    (when (valid-input? input)
-      (cond
-        (= 2 (count input))
-        (construct-move-from (-> (assoc move :piece :pawn)
-                                 (assoc :to (rank-file->coords input))))
+    (if (castling? input) (assoc move :castling (castling-side input))
+        (when (valid-input-string? input)
+          (cond
+            ;; pawn move, eg, 'd4'
+            (= 2 (count input))
+            (construct-move-from (-> (assoc move :piece :pawn)
+                                     (assoc :to (rank-file->coords input))))
 
-        (= 3 (count input))
-        (let [to     (rank-file->coords (subs input 1 3))
-              update (fn [piece] (-> (assoc move :piece piece)
-                                     (assoc :to to)))]
-          (construct-move-from (update (lookup-letter (first input)))))
+            ;; pawn capture, e.g., 'xd4'
+            (and (= 3 (count input)) (= "x" (str/lower-case (first input))))
+            (parse-input (str (rest input)) move)
 
-        (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
-        (parse-input (str (subs input 0 1) (subs input 2)) move)
+            ;; promotion, e.g., 'e8Q'
+            (and (= 3 (count input)) (re-find #"[qknrb]" (str/lower-case (last input))))
+            (parse-input (subs input 0 2) (assoc move :promotion (lookup-piece (str (last input)))))
 
-        (= 4 (count input))
-        (let [from (rank-file->coords (subs input 0 2))
-              to   (rank-file->coords (subs input 2 4))]
-          (constuct-piece-from (-> (assoc move :from from)
-                                   (assoc :to to))))
+            ;; piece move, e.g., 'Nf3'
+            (= 3 (count input))
+            (let [to     (rank-file->coords (subs input 1 3))
+                  update (fn [piece] (-> (assoc move :piece piece)
+                                         (assoc :to to)))]
+              (construct-move-from (update (lookup-piece (first input)))))
 
-        (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
-        (parse-input (str (subs input 0 2) (subs input 3)) move)
+            ;; piece move capture, e.g., 'Nxf3'
+            (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
+            (parse-input (str (subs input 0 1) (subs input 2)) move)
 
-        (= 5 (count input))
-        (parse-input (str (rest input)) (assoc move :piece (lookup-letter (first input))))
+            ;; long algebraic notation, e.g., 'e2e4'
+            (= 4 (count input))
+            (let [from (rank-file->coords (subs input 0 2))
+                  to   (rank-file->coords (subs input 2 4))]
+              (constuct-piece-from (-> (assoc move :from from)
+                                       (assoc :to to))))
 
-        (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
-        (parse-input (str (subs input 0 3) (subs input 4)) move)
-        :else nil))))
+            ;; long notation capture, e.g., 'e2xe4'
+            (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
+            (parse-input (str (subs input 0 2) (subs input 3)) move)
 
+            ;; long notation piece, e.g., 'Rd3d7'
+            (= 5 (count input))
+            (parse-input (str (rest input)) (assoc move :piece (lookup-piece (first input))))
+
+            ;; long notation piece capture, e.g., 'Rd3xd7'
+            (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
+            (parse-input (str (subs input 0 3) (subs input 4)) move)
+            :else nil)))))
+
+
+(comment
+  (parse-input "f8Q" {:board default-board-alt :turn :white})
+  (parse-input "a8=Q" {:board}
+                     (-> blank-board
+                         (update-board {:from [0 1] :to [0 1] :piece "p"}))
+                     :turn :white))
 
 ;; Turn logic
 
