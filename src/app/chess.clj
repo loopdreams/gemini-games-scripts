@@ -109,10 +109,8 @@
        (assoc board y)))
 
 (defn update-board [board {:keys [from to capture? piece]}]
-  (if (and (occupied? board to) (not capture?))
-    "TODO Prompt for Correct Input"
-    (-> (update-square board from)
-        (update-square to piece))))
+  (-> (update-square board from)
+      (update-square to piece)))
 
 (defn pack-board
   "Queries db and adds current board state to previous states.
@@ -158,7 +156,9 @@
 (defn opponent-pieces [turn]
   (if (= turn :white) black-pieces white-pieces))
 
-(defn valid-to [lookup to turn]
+(defn valid-to
+  "Move is valid if space empty or occupied by opponent piece"
+  [lookup to turn]
   (or (= blank-marker (lookup to))
       ((opponent-pieces turn) (lookup to))))
 
@@ -271,43 +271,108 @@
   
 
 
-;; TODO Check recognition
-;; TODO Checkmate recognition
 ;; TODO Castling
 ;; TODO New pieces
 
 ;; Check
-(defn check-detection [board turn]
-  (let [to (first (board-lookup-type board (if (= turn :white) black-K-alt white-K-alt)))
-        player-pieces (reduce (fn [result piece]
-                                (into result (board-lookup-type board piece)))
-                              []
-                              (if (= turn :white) white-pieces black-pieces))]
-    (loop [[p & pieces] player-pieces
-           check nil]
-      (println check)
+
+
+(defn board-lookup-type [board type]
+  (->>
+   (for [i (range 8)
+         :let [row (map-indexed vector (nth board i))
+               filtered (filter #(= (second %) type) row)]
+         :when (seq filtered)]
+     (interleave (map first filtered) (repeat i)))
+   flatten
+   (partition-all 2)))
+
+(defn valid-m-fn-lookup [board p]
+  (case (str/lower-case (board-lookup board p))
+    "k" valid-move-K
+    "q" valid-move-Q
+    "b" valid-move-B
+    "r" valid-move-R
+    "n" valid-move-N
+    "p" valid-move-P))
+
+
+(defn check-detection
+  "Goes through attackers (turn) pieces, and sees if any can reach the position
+  that the defender's king is on (to)"
+  [board turn]
+  (let [to                     (first (board-lookup-type board (if (= turn :white) black-K-alt white-K-alt)))
+        player-piece-positions (reduce (fn [result piece]
+                                         (into result (board-lookup-type board piece)))
+                                       []
+                                       (player-pieces turn))]
+    (loop [[p & pieces] player-piece-positions
+           check        nil]
       (if-not check
         (when p
           (recur pieces
-                 (let [valid-m-fn (case (str/lower-case (board-lookup board p))
-                                    "k" valid-move-K
-                                    "q" valid-move-Q
-                                    "b" valid-move-B
-                                    "r" valid-move-R
-                                    "n" valid-move-N
-                                    "p" valid-move-P)]
+                 (let [valid-m-fn (valid-m-fn-lookup board p)]
                    (when (valid-m-fn {:board board :from p :to to :turn turn})
                      p))))
         check))))
 
+;; Checkmate
+
+(defn move-out-of-check?
+  "Updates board with defender (turn) possible move, then checks based on attacker positions
+  if check still holds."
+  [board possible-positions piece turn]
+  (let [validate-fn     (valid-m-fn-lookup board piece)
+        valid-positions (filter #(validate-fn {:board board :from piece :to %}) possible-positions)
+        p-str           (board-lookup board piece)]
+    (when valid-positions
+      (loop [[v & vs]    valid-positions
+             valid-moves []]
+        (if-not v (seq valid-moves)
+                (if
+                    (check-detection
+                     (update-board board {:from piece :to v :piece p-str})
+                     (if (= turn :white) :black :white)) ;; Simulating the attackers check again
+                    (recur vs valid-moves)
+                    (recur vs (conj valid-moves v))))))))
+
+;; FIXME - the 'turn' logic here is causing this to error...
+(defn checkmate-detection [board turn]
+  (let [turn               (if (= turn :white) :black :white) ;; simulating next turn
+        pieces             (reduce (fn [result piece]
+                                     (into result (board-lookup-type board piece)))
+                                   []
+                                   (player-pieces turn))
+        empty-spaces       (board-lookup-type board blank-marker)
+        opponent-positions (reduce concat (map #(board-lookup-type board %) (opponent-pieces turn)))
+        possible-positions (concat empty-spaces opponent-positions)]
+    (loop [[p & ps]  pieces
+           checkmate true]
+      (if-not checkmate
+        :not-checkmate
+        (if-not p
+          :checkmate
+          (recur
+           ps
+           (when-not (move-out-of-check? board possible-positions p turn)
+             checkmate)))))))
+
+
+
 (comment
-  (check-detection
+  (checkmate-detection
 
    (-> blank-board
        (update-square [0 3] "K")
-       (update-square [1 2] "b"))
+       (update-square [2 3] "q")
+       (update-square [7 7] "k")
+       (update-square [2 1] "n")
+       (update-square [4 0] "b")
+       (update-square [2 7] "Q"))
    :white)
-  (check-detection default-board-alt :white))
+  (check-detection (-> blank-board
+                       (update-square [0 3] "K")
+                       (update-square [1 2] "q")) :white))
 
 (comment
   (draw-board
@@ -359,15 +424,6 @@
               (= (lookup diag-r) target-piece) (assoc move :from diag-r)
               :else                            nil))))))
 
-(defn board-lookup-type [board type]
-  (->>
-   (for [i (range 8)
-         :let [row (map-indexed vector (nth board i))
-               filtered (filter #(= (second %) type) row)]
-         :when (seq filtered)]
-     (interleave (map first filtered) (repeat i)))
-   flatten
-   (partition-all 2)))
 
 (defn type-keyword-lookup [kw turn]
   (let [piece (case kw
