@@ -10,59 +10,58 @@
 
 (def blank-marker (str (char 183)))
 
-(def white-K (str (char 9812)))
-(def white-Q (str (char 9813)))
-(def white-R (str (char 9814)))
-(def white-B (str (char 9815)))
-(def white-Kn (str (char 9816)))
-(def white-P (str (char 9817)))
+;; (def white-K (str (char 9812)))
+;; (def white-Q (str (char 9813)))
+;; (def white-R (str (char 9814)))
+;; (def white-B (str (char 9815)))
+;; (def white-Kn (str (char 9816)))
+;; (def white-P (str (char 9817)))
 
-(def black-K (str (char 9818)))
-(def black-Q (str (char 9819)))
-(def black-R (str (char 9820)))
-(def black-B (str (char 9821)))
-(def black-Kn (str (char 9822)))
-(def black-P (str (char 9823)))
+;; (def black-K (str (char 9818)))
+;; (def black-Q (str (char 9819)))
+;; (def black-R (str (char 9820)))
+;; (def black-B (str (char 9821)))
+;; (def black-Kn (str (char 9822)))
+;; (def black-P (str (char 9823)))
+
+;; (def default-board
+;;   [[black-R black-Kn black-B black-Q black-K black-B black-Kn black-R]
+;;    (into [] (repeat 8 black-P))
+;;    (into [] (repeat 8 blank-marker))
+;;    (into [] (repeat 8 blank-marker))
+;;    (into [] (repeat 8 blank-marker))
+;;    (into [] (repeat 8 blank-marker))
+;;    (into [] (repeat 8 white-P))
+;;    [white-R white-Kn white-B white-Q white-K white-B white-Kn white-R]])
+
+(def white-K "k")
+(def white-Q "q")
+(def white-R "r")
+(def white-B "b")
+(def white-N "n")
+(def white-P "p")
+
+(def black-K "K")
+(def black-Q "Q")
+(def black-R "R")
+(def black-B "B")
+(def black-N "N")
+(def black-P "P")
+
+(def white-pieces #{white-K white-Q white-R white-B white-N white-P})
+(def black-pieces #{black-K black-Q black-R black-B black-N black-P})
 
 (def default-board
-  [[black-R black-Kn black-B black-Q black-K black-B black-Kn black-R]
+  [[black-R black-N black-B black-Q black-K black-B black-N black-R]
    (into [] (repeat 8 black-P))
    (into [] (repeat 8 blank-marker))
    (into [] (repeat 8 blank-marker))
    (into [] (repeat 8 blank-marker))
    (into [] (repeat 8 blank-marker))
    (into [] (repeat 8 white-P))
-   [white-R white-Kn white-B white-Q white-K white-B white-Kn white-R]])
-
-(def white-K-alt "k")
-(def white-Q-alt "q")
-(def white-R-alt "r")
-(def white-B-alt "b")
-(def white-Kn-alt "n")
-(def white-P-alt "p")
-
-(def black-K-alt "K")
-(def black-Q-alt "Q")
-(def black-R-alt "R")
-(def black-B-alt "B")
-(def black-Kn-alt "N")
-(def black-P-alt "P")
-
-(def white-pieces #{white-K-alt white-Q-alt white-R-alt white-B-alt white-Kn-alt white-P-alt})
-(def black-pieces #{black-K-alt black-Q-alt black-R-alt black-B-alt black-Kn-alt black-P-alt})
-
-(def default-board-alt
-  [[black-R-alt black-Kn-alt black-B-alt black-Q-alt black-K-alt black-B-alt black-Kn-alt black-R-alt]
-   (into [] (repeat 8 black-P-alt))
-   (into [] (repeat 8 blank-marker))
-   (into [] (repeat 8 blank-marker))
-   (into [] (repeat 8 blank-marker))
-   (into [] (repeat 8 blank-marker))
-   (into [] (repeat 8 white-P-alt))
-   [white-R-alt white-Kn-alt white-B-alt white-Q-alt white-K-alt white-B-alt white-Kn-alt white-R-alt]])
+   [white-R white-N white-B white-Q white-K white-B white-N white-R]])
 
 (def blank-board (into [] (repeat 8 (into [] (repeat 8 blank-marker)))))
-
 
 (defn type-keyword-lookup [kw turn]
   (let [piece (case kw
@@ -84,12 +83,6 @@
     "r" :rook
     "n" :knight
     "p" :pawn))
-
-#_(def test-board
-    (update-board default-board-alt {:from [1 6]
-                                     :to [1 2]
-                                     :piece "p"
-                                     :capture false}))
 
 
 ;; Make board
@@ -137,15 +130,14 @@
    flatten
    (partition-all 2)))
 
-(defn occupied? [board [x y]]
-  (not= blank-marker (board-lookup board [x y])))
+#_(defn occupied? [board [x y]]
+    (not= blank-marker (board-lookup board [x y])))
 
 (defn update-square [board [x y] & piece]
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
 
-
-(defn update-board [{:keys [board from to turn piece piece-str]}]
+(defn update-board [{:keys [board from to turn piece piece-str] :as move}]
   (let [piece-str (or piece-str (type-keyword-lookup piece turn))]
     (-> (update-square board from)
         (update-square to piece-str))))
@@ -167,7 +159,7 @@
        (mapv #(str/split % #":"))))
 
 (defn unpack-history []
-  (let [history (pack-board default-board-alt)
+  (let [history (pack-board default-board)
         boards (str/split history #"_")]
     (map unpack-board boards)))
 
@@ -187,6 +179,7 @@
 ;; - DONE Castling
 ;; - CANCELLED Promotion (covered in pawn validation)
 
+(declare check-detection)
 
 (defn player-pieces [turn]
   (if (= turn :white) white-pieces black-pieces))
@@ -204,92 +197,131 @@
   (= (abs (- x2 x1))
      (abs (- y2 y1))))
 
+(defn invert-turn [turn]
+  (if (= turn :white) :black :white))
+
+(defn move-creates-check? [{:keys [board turn from] :as move}]
+  (let [n-turn (invert-turn turn)
+        piece-str (board-lookup board from)]
+    (-> move
+        (assoc :piece-str piece-str)
+        update-board
+        (check-detection n-turn))))
+
 ;; Pawn
-(defn valid-move-P [{:keys [board from to turn]}]
-  (let [player-pieces   (player-pieces turn)
-        opponent-pieces (opponent-pieces turn)
+(defn valid-move-P [{:keys [board from to turn] :as move}]
+  (let [opponent-pieces (opponent-pieces turn)
         [x1 y1]         from
         lookup          (partial board-lookup board)
         starting-points (into #{} (for [i (range 8)]
                                     [i (if (= turn :white) 6 1)]))
         direction       (if (= turn :white) - +)]
-    (when (player-pieces (lookup from)) ;; FIXME - check for pawn piece only
-      (cond
-        (= blank-marker (lookup to)) (or (= [x1 (direction y1 1)] to)
-                                         (and (starting-points from)
-                                              (= [x1 (direction y1 2)] to)))
-                                              
-        (opponent-pieces (lookup to)) (or (= [(dec x1) (direction y1 1)] to)
-                                          (= [(inc x1) (direction y1 1)] to))
-        :else false))))
+    (and
+     (= (if (= turn :white) white-P black-P)
+        (lookup from))
+     (cond
+       (= blank-marker (lookup to)) (or (= [x1 (direction y1 1)] to)
+                                        (and (starting-points from)
+                                             (= [x1 (direction y1 2)] to)))
+        
+       (opponent-pieces (lookup to)) (or (= [(dec x1) (direction y1 1)] to)
+                                         (= [(inc x1) (direction y1 1)] to))
+       :else                         false)
+     (not (move-creates-check? move)))))
+
 
 ;; Knight
-(defn valid-move-N [{:keys [board from to turn]}]
-  (let [player-pieces   (player-pieces turn)
-        [x1 y1]         from
+(defn valid-move-N [{:keys [board from to turn] :as move}]
+  (let [[x1 y1]         from
         lookup          (partial board-lookup board)]
-    (when (and (player-pieces (lookup from)) ;; FIXME
-               (not (player-pieces (lookup to)))
-               (lookup to))
-      (or
-       (= to [(+ x1 2) (- y1 1)])
-       (= to [(- x1 2) (- y1 1)])
-       (= to [(+ x1 2) (+ y1 1)])
-       (= to [(- x1 2) (+ y1 1)])
-       (= to [(+ x1 1) (+ y1 2)])
-       (= to [(- x1 1) (+ y1 2)])
-       (= to [(+ x1 1) (- y1 2)])
-       (= to [(- x1 1) (- y1 2)])))))
+    (and
+     (= (if (= turn :white) white-N black-N)
+        (lookup from))
+     (or
+      (= to [(+ x1 2) (- y1 1)])
+      (= to [(- x1 2) (- y1 1)])
+      (= to [(+ x1 2) (+ y1 1)])
+      (= to [(- x1 2) (+ y1 1)])
+      (= to [(+ x1 1) (+ y1 2)])
+      (= to [(- x1 1) (+ y1 2)])
+      (= to [(+ x1 1) (- y1 2)])
+      (= to [(- x1 1) (- y1 2)]))
+     (valid-to lookup to turn)
+     (not (move-creates-check? move)))))
+
+(defn between-squares-h [[x1 y1] [x2 y2]]
+  (-> (for [i (apply range (sort (if (= x1 x2) [y1 y2] [x1 x2])))]
+        (if (= x1 x2) [x1 i] [i y1]))
+      rest))
+
+(defn between-squares-d [[x1 y1] [x2 y2]]
+  (when (diagonal? [x1 y1] [x2 y2])
+    (let [slope (/ (- y2 y1)
+                   (- x2 x1))
+          xs (rest (apply range (sort [x1 x2])))
+          ys (apply range (sort [y1 y2]))
+          
+          ys (if (= slope -1)
+               (drop-last (reverse ys))
+               (rest ys))]
+      (->> (interleave xs ys)
+           (partition-all 2)))))
 
 ;; Rook
-(defn valid-move-R [{:keys [board from to turn]}]
+(defn valid-move-R [{:keys [board from to turn] :as move}]
   (let [[x1 y1] from
         [x2 y2] to
         lookup  (partial board-lookup board)]
     (when (or (= x1 x2) (= y1 y2))
-      (let [between-squares (-> (for [i (apply range (sort (if (= x1 x2) [y1 y2] [x1 x2])))]
-                                  (if (= x1 x2) [x1 i] [i y1]))
-                                rest)]
-        (when (every? #(= blank-marker %) (map lookup between-squares))
-          (valid-to lookup to turn))))))
+      (let [between-squares (between-squares-h from to)]
+        (and
+         (= (if (= turn :white) white-R black-R)
+            (lookup from))
+         (or (every? #(= blank-marker %) (map lookup between-squares))
+             (empty? between-squares))
+         (valid-to lookup to turn)
+         (not (move-creates-check? move)))))))
+          
 
-(defn get-diagonal-points-between [[x1 y1] [x2 y2]]
-  (when (diagonal? [x1 y1] [x2 y2])
-    (let [slope (/ (- y2 y1)
-                   (- x2 x1))]
-      (when (or (= slope 1) (= slope -1))
-        (let [xs (rest (apply range (sort [x1 x2])))
-              ys (apply range (sort [y1 y2]))
-              ys (if (= slope -1)
-                   (drop-last (reverse ys))
-                   (rest ys))]
-          (->> (interleave xs ys)
-               (partition-all 2)))))))
-
-(defn valid-move-B [{:keys [board from to turn]}]
-  (let [between-points (get-diagonal-points-between from to)
+(defn valid-move-B [{:keys [board from to turn] :as move}]
+  (let [between-points (between-squares-d from to)
         lookup (partial board-lookup board)]
-    (when between-points
-      (when (or (every? #(= blank-marker %) (map lookup between-points))
-                (empty? between-points))
-        (valid-to lookup to turn)))))
-
-
+    (and between-points
+         (or (every? #(= blank-marker %) (map lookup between-points))
+             (empty? between-points))
+         (valid-to lookup to turn)
+         (not (move-creates-check? move)))))
+         
 
 ;; Queen
-(defn valid-move-Q [m]
-  (or (valid-move-B m)
-      (valid-move-R m)))
+(defn valid-move-Q [{:keys [board from to turn] :as move}]
+  (let [[x1 y1] from
+        [x2 y2] to
+        lookup (partial board-lookup board)
+        between-squares (if (or (= x1 x2)
+                                (= y1 y2))
+                          (between-squares-h from to)
+                          (between-squares-d from to))]
+    (and (= (if (= turn :white) white-Q black-Q)
+            (lookup from))
+         between-squares
+         (or (empty? between-squares)
+             (every? #(= blank-marker %) (map lookup between-squares)))
+         (valid-to lookup to turn)
+         (not (move-creates-check? move)))))
 
 ;; King
 ;; TODO add 'check' restriction
-(defn valid-move-K [{:keys [board from to turn]}]
+(defn valid-move-K [{:keys [board from to turn] :as move}]
   (let [[x1 y1] from
-        [x2 y2] to]
-    (when (or (and (= 1 (abs (- x2 x1))) (= y2 y1))
-              (and (= 1 (abs (- y2 y1))) (= x2 x1))
-              (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))
-      (valid-to (partial board-lookup board) to turn))))
+        [x2 y2] to
+        lookup (partial board-lookup board)]
+    (and (= (if (= turn :white) white-K black-K) (lookup from))
+         (or (and (= 1 (abs (- x2 x1))) (= y2 y1))
+             (and (= 1 (abs (- y2 y1))) (= x2 x1))
+             (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))
+         (valid-to (partial board-lookup board) to turn)
+         (not (move-creates-check? move)))))
 
 (defn valid-m-fn-lookup [board p]
   (case (str/lower-case (board-lookup board p))
@@ -312,9 +344,9 @@
     (when (and (= blank-marker (lookup new-king))
                (= blank-marker (lookup new-rook))
                ;; checking if pieces have moved previously:
-               (every? #(= (if (= turn :white) white-R-alt black-R-alt) %)
+               (every? #(= (if (= turn :white) white-R black-R) %)
                        (map #(board-lookup % rook) history))
-               (every? #(= (if (= turn :white) white-K-alt black-K-alt) %)
+               (every? #(= (if (= turn :white) white-K black-K) %)
                        (map #(board-lookup % king) history)))
       "TODO handle castling board update")))
            
@@ -323,9 +355,9 @@
   (valid-move-R {:board (-> (update-square blank-board [0 0] "R")
                             (update-square [0 1] "p"))
                  :from [0 0] :to [0 1] :turn :black})
-  (valid-move-N {:board default-board-alt :from [2 0] :to [3 2] :turn :black})
-  (valid-move-R {:board default-board-alt :from [2 2] :to [6 3] :turn :black})
-  (valid-move-P {:board default-board-alt :from [2 1] :to [1 2] :turn :black}))
+  (valid-move-N {:board default-board :from [2 0] :to [3 2] :turn :black})
+  (valid-move-R {:board default-board :from [2 2] :to [6 3] :turn :black})
+  (valid-move-P {:board default-board :from [2 1] :to [1 2] :turn :black}))
   
 
 
@@ -338,7 +370,7 @@
   "Goes through attackers (turn) pieces, and sees if any can reach the position
   that the defender's king is on (to)"
   [board turn]
-  (let [to                     (first (board-lookup-type board (if (= turn :white) black-K-alt white-K-alt)))
+  (let [to                     (first (board-lookup-type board (if (= turn :white) black-K white-K)))
         player-piece-positions (reduce (fn [result piece]
                                          (into result (board-lookup-type board piece)))
                                        []
@@ -351,7 +383,9 @@
                  (let [valid-m-fn (valid-m-fn-lookup board p)]
                    (when (valid-m-fn {:board board :from p :to to :turn turn})
                      p))))
-        check))))
+        (do
+          (println "Check!")
+          check)))))
 
 ;; Checkmate
 
@@ -412,7 +446,7 @@
 
 (comment
   (draw-board
-   (update-board {:board default-board-alt
+   (update-board {:board default-board
                   :from [6 7]
                   :to [5 5]
                   :piece "n"
@@ -443,7 +477,7 @@
       ;; Pawn lookup
       (let [[x2 y2]      to
             direction    (if (= turn :white) + -) ;; looking backward
-            target-piece (if (= turn :white) white-P-alt black-P-alt)
+            target-piece (if (= turn :white) white-P black-P)
             lookup       (partial board-lookup board)]
         (if (= blank-marker (board-lookup board to))
           (cond
@@ -462,8 +496,8 @@
               :else                            nil))))))
 
 
-(defn construct-move-from [{:keys [board turn piece ] :as move}]
-  (if (:from move) move
+(defn construct-move-from [{:keys [board turn piece from] :as move}]
+  (if from move
       (if (= piece :pawn) (construct-move-from-pawn move)
           (let [pos        (board-lookup-type board (type-keyword-lookup piece turn))
                 valid-m-fn (case piece
@@ -474,8 +508,12 @@
                              :knight valid-move-N
                              :pawn   valid-move-P)
                 pos-f      (filter #(valid-m-fn (assoc move :from %)) pos)]
-            (if (> (count pos-f) 1) (println  "TODO Disambiguation step")
-                (assoc move :from (into [] (first pos-f))))))))
+            (cond
+              (empty? pos-f) nil
+              (> (count pos-f) 1) (println  "TODO Disambiguation step")
+              :else (assoc move :from (into [] (first pos-f))))))))
+
+
           
 (defn constuct-piece-from [{:keys [board from] :as move}]
   (assoc move :piece-str (board-lookup board from)))
@@ -554,7 +592,7 @@
                   "Bxb5+" "Nb8d7"])
 
 (comment
-  (let [b (atom default-board-alt)
+  (let [b (atom default-board)
         t (atom :white)
         c (atom 1)]
     (for [move sample-game
@@ -567,11 +605,12 @@
         (println "\n")
         (println (draw-board update))
         (println "------------------------------------------\n")
-        (println (str "Check Status: " (if (check-detection update @t) "Check" "Not Check")))
-        (reset! b update)
         (reset! t n-turn)
+        (reset! b update)
         (swap! c inc)))))
-;;
+
+
+
 ;; Turn logic
 
 
@@ -589,7 +628,7 @@
   (->> (str "# Chess"
             break
             "```\n"
-            (draw-board default-board-alt)
+            (draw-board default-board)
             break
             (draw-board default-board)
             "\n```\n")
