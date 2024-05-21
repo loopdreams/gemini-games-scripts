@@ -64,6 +64,27 @@
 (def blank-board (into [] (repeat 8 (into [] (repeat 8 blank-marker)))))
 
 
+(defn type-keyword-lookup [kw turn]
+  (let [piece (case kw
+                :king "K"
+                :queen "Q"
+                :rook "R"
+                :bishop "B"
+                :knight "N"
+                :pawn "P")]
+       (if (= turn :white)
+         (str/lower-case piece)
+         piece)))
+
+(defn lookup-piece [letter]
+  (case (str/lower-case letter)
+    "k" :king
+    "q" :queen
+    "b" :bishop
+    "r" :rook
+    "n" :knight
+    "p" :pawn))
+
 #_(def test-board
     (update-board default-board-alt {:from [1 6]
                                      :to [1 2]
@@ -96,10 +117,25 @@
 
 ;; Game logic
 ;; Game logic map:
-;; {board from to capture turn}
+;; {:board board-state
+;; :from coords-from (e.g., [0 0])
+;; :to coords-to (e.g., [0 1])
+;; :turn e.g., :white
+;; :piece piece-name e.g., :king
+;; :piece-str piece-string e.g., "k"}
 
 (defn board-lookup [board [x y]]
   (nth (nth board y) x))
+
+(defn board-lookup-type [board type]
+  (->>
+   (for [i (range 8)
+         :let [row (map-indexed vector (nth board i))
+               filtered (filter #(= (second %) type) row)]
+         :when (seq filtered)]
+     (interleave (map first filtered) (repeat i)))
+   flatten
+   (partition-all 2)))
 
 (defn occupied? [board [x y]]
   (not= blank-marker (board-lookup board [x y])))
@@ -108,9 +144,11 @@
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
 
-(defn update-board [board {:keys [from to capture? piece]}]
-  (-> (update-square board from)
-      (update-square to piece)))
+
+(defn update-board [{:keys [board from to turn piece piece-str]}]
+  (let [piece-str (or piece-str (type-keyword-lookup piece turn))]
+    (-> (update-square board from)
+        (update-square to piece-str))))
 
 (defn pack-board
   "Queries db and adds current board state to previous states.
@@ -175,7 +213,7 @@
         starting-points (into #{} (for [i (range 8)]
                                     [i (if (= turn :white) 6 1)]))
         direction       (if (= turn :white) - +)]
-    (when (player-pieces (lookup from))
+    (when (player-pieces (lookup from)) ;; FIXME - check for pawn piece only
       (cond
         (= blank-marker (lookup to)) (or (= [x1 (direction y1 1)] to)
                                          (and (starting-points from)
@@ -190,7 +228,7 @@
   (let [player-pieces   (player-pieces turn)
         [x1 y1]         from
         lookup          (partial board-lookup board)]
-    (when (and (player-pieces (lookup from))
+    (when (and (player-pieces (lookup from)) ;; FIXME
                (not (player-pieces (lookup to)))
                (lookup to))
       (or
@@ -215,17 +253,28 @@
         (when (every? #(= blank-marker %) (map lookup between-squares))
           (valid-to lookup to turn))))))
 
+(defn get-diagonal-points-between [[x1 y1] [x2 y2]]
+  (when (diagonal? [x1 y1] [x2 y2])
+    (let [slope (/ (- y2 y1)
+                   (- x2 x1))]
+      (when (or (= slope 1) (= slope -1))
+        (let [xs (rest (apply range (sort [x1 x2])))
+              ys (apply range (sort [y1 y2]))
+              ys (if (= slope -1)
+                   (drop-last (reverse ys))
+                   (rest ys))]
+          (->> (interleave xs ys)
+               (partition-all 2)))))))
 
 (defn valid-move-B [{:keys [board from to turn]}]
-  (when (diagonal? from to)
-    (let [[x1 y1]    from
-          [x2 y2]    to
-          lookup     (partial board-lookup board)
-          btw-xs     (rest (apply range (sort [x1 x2])))
-          btw-ys     (rest (apply range (sort [y1 y2])))
-          btw-points (partition-all 2 (interleave btw-xs btw-ys))]
-      (when (every? #(= blank-marker %) (map lookup btw-points))
+  (let [between-points (get-diagonal-points-between from to)
+        lookup (partial board-lookup board)]
+    (when between-points
+      (when (or (every? #(= blank-marker %) (map lookup between-points))
+                (empty? between-points))
         (valid-to lookup to turn)))))
+
+
 
 ;; Queen
 (defn valid-move-Q [m]
@@ -241,6 +290,15 @@
               (and (= 1 (abs (- y2 y1))) (= x2 x1))
               (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))
       (valid-to (partial board-lookup board) to turn))))
+
+(defn valid-m-fn-lookup [board p]
+  (case (str/lower-case (board-lookup board p))
+    "k" valid-move-K
+    "q" valid-move-Q
+    "b" valid-move-B
+    "r" valid-move-R
+    "n" valid-move-N
+    "p" valid-move-P))
 
 (defn valid-move-castle [{:keys [board turn castling]}]
   (let [rx1      (if (= castling :kingside) 7 0)
@@ -272,30 +330,9 @@
 
 
 ;; TODO Castling
-;; TODO New pieces
+;; TODO Promotion
 
 ;; Check
-
-
-(defn board-lookup-type [board type]
-  (->>
-   (for [i (range 8)
-         :let [row (map-indexed vector (nth board i))
-               filtered (filter #(= (second %) type) row)]
-         :when (seq filtered)]
-     (interleave (map first filtered) (repeat i)))
-   flatten
-   (partition-all 2)))
-
-(defn valid-m-fn-lookup [board p]
-  (case (str/lower-case (board-lookup board p))
-    "k" valid-move-K
-    "q" valid-move-Q
-    "b" valid-move-B
-    "r" valid-move-R
-    "n" valid-move-N
-    "p" valid-move-P))
-
 
 (defn check-detection
   "Goes through attackers (turn) pieces, and sees if any can reach the position
@@ -321,32 +358,31 @@
 (defn move-out-of-check?
   "Updates board with defender (turn) possible move, then checks based on attacker positions
   if check still holds."
-  [board possible-positions piece turn]
-  (let [validate-fn     (valid-m-fn-lookup board piece)
-        valid-positions (filter #(validate-fn {:board board :from piece :to %}) possible-positions)
-        p-str           (board-lookup board piece)]
+  [board possible-positions piece-coord turn]
+  (let [validate-fn     (valid-m-fn-lookup board piece-coord)
+        valid-positions (filter #(validate-fn {:board board :from piece-coord :to %}) possible-positions)
+        p-str           (board-lookup board piece-coord)]
     (when valid-positions
       (loop [[v & vs]    valid-positions
              valid-moves []]
         (if-not v (seq valid-moves)
                 (if
                     (check-detection
-                     (update-board board {:from piece :to v :piece p-str})
+                     (update-board {:board board :from piece-coord :to v :piece-str p-str})
                      (if (= turn :white) :black :white)) ;; Simulating the attackers check again
                     (recur vs valid-moves)
                     (recur vs (conj valid-moves v))))))))
 
-;; FIXME - the 'turn' logic here is causing this to error...
 (defn checkmate-detection [board turn]
   (let [turn               (if (= turn :white) :black :white) ;; simulating next turn
-        pieces             (reduce (fn [result piece]
-                                     (into result (board-lookup-type board piece)))
-                                   []
-                                   (player-pieces turn))
+        pieces-coords             (reduce (fn [result piece]
+                                            (into result (board-lookup-type board piece)))
+                                          []
+                                          (player-pieces turn))
         empty-spaces       (board-lookup-type board blank-marker)
         opponent-positions (reduce concat (map #(board-lookup-type board %) (opponent-pieces turn)))
         possible-positions (concat empty-spaces opponent-positions)]
-    (loop [[p & ps]  pieces
+    (loop [[p & ps]  pieces-coords
            checkmate true]
       (if-not checkmate
         :not-checkmate
@@ -356,7 +392,6 @@
            ps
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
-
 
 
 (comment
@@ -374,12 +409,14 @@
                        (update-square [0 3] "K")
                        (update-square [1 2] "q")) :white))
 
+
 (comment
   (draw-board
-   (update-board default-board-alt {:from [6 7]
-                                    :to [5 5]
-                                    :piece "n"
-                                    :capture false})))
+   (update-board {:board default-board-alt
+                  :from [6 7]
+                  :to [5 5]
+                  :piece "n"
+                  :capture false})))
 
 ;; Input Handling
 ;; Algebraic notation:
@@ -405,8 +442,8 @@
   (if (:from move) move
       ;; Pawn lookup
       (let [[x2 y2]      to
-            direction    (if (= turn :white) + -)
-            target-piece (if (= turn :white) white-P-alt black-P-alt) ;; looking backward
+            direction    (if (= turn :white) + -) ;; looking backward
+            target-piece (if (= turn :white) white-P-alt black-P-alt)
             lookup       (partial board-lookup board)]
         (if (= blank-marker (board-lookup board to))
           (cond
@@ -425,20 +462,7 @@
               :else                            nil))))))
 
 
-(defn type-keyword-lookup [kw turn]
-  (let [piece (case kw
-                :king "K"
-                :queen "Q"
-                :rook "R"
-                :bishop "B"
-                :knight "N"
-                :pawn "P")]
-       (if (= turn :white)
-         (str/lower-case piece)
-         piece)))
-
-  
-(defn construct-move-from [{:keys [board turn piece to] :as move}]
+(defn construct-move-from [{:keys [board turn piece ] :as move}]
   (if (:from move) move
       (if (= piece :pawn) (construct-move-from-pawn move)
           (let [pos        (board-lookup-type board (type-keyword-lookup piece turn))
@@ -450,20 +474,12 @@
                              :knight valid-move-N
                              :pawn   valid-move-P)
                 pos-f      (filter #(valid-m-fn (assoc move :from %)) pos)]
-            (if (> (count pos-f) 1) "TODO Disambiguation step"
+            (if (> (count pos-f) 1) (println  "TODO Disambiguation step")
                 (assoc move :from (into [] (first pos-f))))))))
           
 (defn constuct-piece-from [{:keys [board from] :as move}]
-  (assoc move :piece (board-lookup board from)))
+  (assoc move :piece-str (board-lookup board from)))
 
-(defn lookup-piece [letter]
-  (case (str/lower-case letter)
-    "k" :king
-    "q" :queen
-    "b" :bishop
-    "r" :rook
-    "n" :knight
-    "p" :pawn))
 
 (defn castling? [input]
   (some #{input} ["00" "OO" "000" "OOO"]))
@@ -475,7 +491,7 @@
     "000" :queenside
     "OOO" :queenside))
 
-(defn parse-input [input move]
+(defn parse-input [move input]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
     (if (castling? input) (assoc move :castling (castling-side input))
         (when (valid-input-string? input)
@@ -487,11 +503,11 @@
 
             ;; pawn capture, e.g., 'xd4'
             (and (= 3 (count input)) (= "x" (str/lower-case (first input))))
-            (parse-input (str (rest input)) move)
+            (parse-input move (str (rest input)))
 
             ;; promotion, e.g., 'e8Q'
             (and (= 3 (count input)) (re-find #"[qknrb]" (str/lower-case (last input))))
-            (parse-input (subs input 0 2) (assoc move :promotion (lookup-piece (str (last input)))))
+            (parse-input  (assoc move :promotion (lookup-piece (str (last input)))) (subs input 0 2))
 
             ;; piece move, e.g., 'Nf3'
             (= 3 (count input))
@@ -502,7 +518,7 @@
 
             ;; piece move capture, e.g., 'Nxf3'
             (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
-            (parse-input (str (subs input 0 1) (subs input 2)) move)
+            (parse-input move (str (subs input 0 1) (subs input 2)))
 
             ;; long algebraic notation, e.g., 'e2e4'
             (= 4 (count input))
@@ -513,25 +529,49 @@
 
             ;; long notation capture, e.g., 'e2xe4'
             (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
-            (parse-input (str (subs input 0 2) (subs input 3)) move)
+            (parse-input move (str (subs input 0 2) (subs input 3)))
 
             ;; long notation piece, e.g., 'Rd3d7'
             (= 5 (count input))
-            (parse-input (str (rest input)) (assoc move :piece (lookup-piece (first input))))
+            (parse-input (assoc move :piece (lookup-piece (first input))) (str (rest input)))
 
             ;; long notation piece capture, e.g., 'Rd3xd7'
             (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
-            (parse-input (str (subs input 0 3) (subs input 4)) move)
+            (parse-input move (str (subs input 0 3) (subs input 4)))
             :else nil)))))
 
 
-(comment
-  (parse-input "f8Q" {:board default-board-alt :turn :white})
-  (parse-input "a8=Q" {:board
-                       (-> blank-board
-                           (update-board {:from [0 1] :to [0 1] :piece "p"}))
-                       :turn :white}))
+(def sample-game ["e4" "e5"
+                  "Nf3" "d6"
+                  "d4" "Bg4"
+                  "d4xe5" "Bxf3"
+                  "Qxf3" "d6xe5"
+                  "Bc4" "Nf6"
+                  "Qb3" "Qe7"
+                  "Nc3" "c6"
+                  "Bg5" "b5"
+                  "Nxb5" "c6xb5"
+                  "Bxb5+" "Nb8d7"])
 
+(comment
+  (let [b (atom default-board-alt)
+        t (atom :white)
+        c (atom 1)]
+    (for [move sample-game
+          :let [update (-> {:board @b :turn @t}
+                           (parse-input move)
+                           update-board)
+                n-turn (if (= @t :white) :black :white)]]
+      (do
+        (println (str @c ". " move))
+        (println "\n")
+        (println (draw-board update))
+        (println "------------------------------------------\n")
+        (println (str "Check Status: " (if (check-detection update @t) "Check" "Not Check")))
+        (reset! b update)
+        (reset! t n-turn)
+        (swap! c inc)))))
+;;
 ;; Turn logic
 
 
