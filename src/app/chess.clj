@@ -137,10 +137,32 @@
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
 
+(defn update-board-castling [{:keys [board from-k to-k from-r to-r turn]}]
+  (let [k-str (if (= turn :white) white-K black-K)
+        r-str (if (= turn :white) white-R black-R)]
+    (-> (update-square board from-k)
+        (update-square from-r)
+        (update-square to-k k-str)
+        (update-square to-r r-str))))
+
 (defn update-board [{:keys [board from to turn piece piece-str] :as move}]
-  (let [piece-str (or piece-str (type-keyword-lookup piece turn))]
-    (-> (update-square board from)
-        (update-square to piece-str))))
+  (if (:castling move) (update-board-castling move)
+      (let [piece-str (if (:promotion move)
+                        (type-keyword-lookup (:promotion move) turn)
+                        (or
+                         piece-str
+                         (type-keyword-lookup piece turn)))]
+        (-> (update-square board from)
+            (update-square to piece-str)))))
+
+;; Board DB Interaction
+
+;; For testing
+(def board-store (atom nil))
+
+;; TODO connect to DB
+(defn get-board-history! []
+  @board-store)
 
 (defn pack-board
   "Queries db and adds current board state to previous states.
@@ -148,26 +170,38 @@
   col-separator \" \"
   board-separator \"_\" "
   [board]
-  (let [history "TODO"]
-    (str history "_"
-         (str/join " "
-                   (for [row board]
-                     (str/join ":" row))))))
+  (let [history (get-board-history!)]
+    (->> row
+         (str/join ":")
+         (for [row board])
+         (str/join " ")
+         (str (when history "_")))))
+
+;; TODO connect to DB
+(defn submit-board! [new-board]
+  (reset! board-store new-board))
+
+(comment
+  (-> (pack-board default-board)
+      (submit-board!)))
 
 (defn unpack-board [board]
   (->> (str/split board #" ")
        (mapv #(str/split % #":"))))
 
 (defn unpack-history []
-  (let [history (pack-board default-board)
-        boards (str/split history #"_")]
-    (map unpack-board boards)))
+  (let [history (get-board-history!)]
+    (when history
+      (map unpack-board
+           (str/split history #"_")))))
 
 (defn get-board-state
   ([] (last (unpack-history)))
   ([n] (let [history (unpack-history)]
          (when (< n (count history))
            (nth history n)))))
+
+
 
 ;; Valid moves for:
 ;; - DONE Pawn
@@ -212,11 +246,13 @@
 (defn valid-move-P [{:keys [board from to turn] :as move}]
   (let [opponent-pieces (opponent-pieces turn)
         [x1 y1]         from
+        [_ y2]          to
         lookup          (partial board-lookup board)
         starting-points (into #{} (for [i (range 8)]
                                     [i (if (= turn :white) 6 1)]))
         direction       (if (= turn :white) - +)]
     (and
+     (and (not (:promotion move)) (not (= y2 (if (= turn :white) 0 7)))) ;; FIXME - check if this is actually needed here...
      (= (if (= turn :white) white-P black-P)
         (lookup from))
      (cond
@@ -332,7 +368,7 @@
     "n" valid-move-N
     "p" valid-move-P))
 
-(defn valid-move-castle [{:keys [board turn castling]}]
+(defn valid-move-castling [{:keys [board turn castling] :as move}]
   (let [rx1      (if (= castling :kingside) 7 0)
         ry1      (if (= turn :white) 7 0)
         rook     [rx1 ry1]
@@ -341,14 +377,30 @@
         new-king [(if (= castling :kingside) 6 2) ry1]
         history  (unpack-history)
         lookup   (partial board-lookup board)]
-    (when (and (= blank-marker (lookup new-king))
-               (= blank-marker (lookup new-rook))
-               ;; checking if pieces have moved previously:
-               (every? #(= (if (= turn :white) white-R black-R) %)
-                       (map #(board-lookup % rook) history))
-               (every? #(= (if (= turn :white) white-K black-K) %)
-                       (map #(board-lookup % king) history)))
-      "TODO handle castling board update")))
+    (when
+        (and
+         (= (if (= turn :white) white-K black-K) (lookup king))
+         (= (if (= turn :white) white-R black-R) (lookup rook))
+         (= blank-marker (lookup new-king))
+         (= blank-marker (lookup new-rook))
+         ;; checking if pieces have moved previously:
+         (every? #(= (if (= turn :white) white-R black-R) %)
+                 (map #(board-lookup % rook) history))
+         (every? #(= (if (= turn :white) white-K black-K) %)
+                 (map #(board-lookup % king) history)))
+      (-> move
+          (assoc :from-k king)
+          (assoc :to-k new-king)
+          (assoc :from-r rook)
+          (assoc :to-r new-rook)))))
+
+(comment
+  (valid-move-castling
+   (parse-input {:board (-> blank-board
+                            (update-square [4 7] "k")
+                            (update-square [7 7] "r"))
+                 :turn :white}
+                "0-0")))
            
 
 (comment
@@ -473,27 +525,29 @@
 (defn construct-move-from-pawn
   "For pawn input"
   [{:keys [board turn to] :as move}]
-  (if (:from move) move
-      ;; Pawn lookup
-      (let [[x2 y2]      to
-            direction    (if (= turn :white) + -) ;; looking backward
-            target-piece (if (= turn :white) white-P black-P)
-            lookup       (partial board-lookup board)]
-        (if (= blank-marker (board-lookup board to))
-          (cond
-            (= (lookup [x2 (direction y2 1)]) target-piece)
-            (assoc move :from [x2 (direction y2 1)])
-            (= (lookup [x2 (direction y2 2)]) target-piece)
-            (assoc move :from [x2 (direction y2 2)])
-            :else nil)
-          (let [diag-l [(dec x2) (direction y2 1)]
-                diag-r [(inc x2) (direction y2 1)]]
+  (if (and (not (:promotion move)) (= (second to) (if (= turn :white) 0 7)))
+    (println "TODO Disambiguation step - ask for piece to promote to")
+    (if (:from move) move
+        ;; Pawn lookup
+        (let [[x2 y2]      to
+              direction    (if (= turn :white) + -) ;; looking backward
+              target-piece (if (= turn :white) white-P black-P)
+              lookup       (partial board-lookup board)]
+          (if (= blank-marker (board-lookup board to))
             (cond
-              (and (= (lookup diag-l) target-piece) (= (lookup diag-r) target-piece))
-              "TODO Disambiguation step"
-              (= (lookup diag-l) target-piece) (assoc move :from diag-l)
-              (= (lookup diag-r) target-piece) (assoc move :from diag-r)
-              :else                            nil))))))
+              (= (lookup [x2 (direction y2 1)]) target-piece)
+              (assoc move :from [x2 (direction y2 1)])
+              (= (lookup [x2 (direction y2 2)]) target-piece)
+              (assoc move :from [x2 (direction y2 2)])
+              :else nil)
+            (let [diag-l [(dec x2) (direction y2 1)]
+                  diag-r [(inc x2) (direction y2 1)]]
+              (cond
+                (and (= (lookup diag-l) target-piece) (= (lookup diag-r) target-piece))
+                "TODO Disambiguation step"
+                (= (lookup diag-l) target-piece) (assoc move :from diag-l)
+                (= (lookup diag-r) target-piece) (assoc move :from diag-r)
+                :else                            nil)))))))
 
 
 (defn construct-move-from [{:keys [board turn piece from] :as move}]
@@ -513,11 +567,8 @@
               (> (count pos-f) 1) (println  "TODO Disambiguation step")
               :else (assoc move :from (into [] (first pos-f))))))))
 
-
-          
 (defn constuct-piece-from [{:keys [board from] :as move}]
   (assoc move :piece-str (board-lookup board from)))
-
 
 (defn castling? [input]
   (some #{input} ["00" "OO" "000" "OOO"]))
@@ -531,7 +582,8 @@
 
 (defn parse-input [move input]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
-    (if (castling? input) (assoc move :castling (castling-side input))
+    (if (castling? input) (-> (assoc move :castling (castling-side input))
+                              valid-move-castling)
         (when (valid-input-string? input)
           (cond
             ;; pawn move, eg, 'd4'
@@ -545,7 +597,8 @@
 
             ;; promotion, e.g., 'e8Q'
             (and (= 3 (count input)) (re-find #"[qknrb]" (str/lower-case (last input))))
-            (parse-input  (assoc move :promotion (lookup-piece (str (last input)))) (subs input 0 2))
+            (parse-input  (assoc move :promotion (lookup-piece (str (last input))))
+                          (subs input 0 2))
 
             ;; piece move, e.g., 'Nf3'
             (= 3 (count input))
@@ -578,6 +631,17 @@
             (parse-input move (str (subs input 0 3) (subs input 4)))
             :else nil)))))
 
+(comment
+  ;; Testing promotion
+  (->
+     (parse-input
+      {:board
+       (-> blank-board
+           (update-square [0 1] "p"))
+       :turn :white}
+      "a8Q")
+     (update-board)))
+
 
 (def sample-game ["e4" "e5"
                   "Nf3" "d6"
@@ -589,7 +653,8 @@
                   "Nc3" "c6"
                   "Bg5" "b5"
                   "Nxb5" "c6xb5"
-                  "Bxb5+" "Nb8d7"])
+                  "Bxb5+" "Nb8d7"
+                  "0-0-0"])
 
 (comment
   (let [b (atom default-board)
