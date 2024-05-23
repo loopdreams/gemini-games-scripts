@@ -155,63 +155,54 @@
         (-> (update-square board from)
             (update-square to piece-str)))))
 
+
 ;; Board DB Interaction
 
 ;; For testing
-(def board-store (atom nil))
+#_(def board-store (atom nil))
 
-;; TODO connect to DB
-(defn get-board-history! []
-  @board-store)
+
+(defn get-board-history! [gameid]
+  (db/get-board-history gameid))
 
 (defn pack-board
   "Queries db and adds current board state to previous states.
   row-separator \":\"
   col-separator \" \"
   board-separator \"_\" "
-  [board]
-  (let [history (get-board-history!)]
-    (->> row
-         (str/join ":")
-         (for [row board])
-         (str/join " ")
-         (str (when history "_")))))
+  ([board]
+   (->> row
+        (str/join ":")
+        (for [row board])
+        (str/join " ")))
+  ([board gameid]
+   (let [history (get-board-history! gameid)]
+     (->> row
+          (str/join ":")
+          (for [row board])
+          (str/join " ")
+          (str history "_")))))
 
-;; TODO connect to DB
-(defn submit-board! [new-board]
-  (reset! board-store new-board))
 
-(comment
-  (-> (pack-board default-board)
-      (submit-board!)))
 
 (defn unpack-board [board]
   (->> (str/split board #" ")
        (mapv #(str/split % #":"))))
 
-(defn unpack-history []
-  (let [history (get-board-history!)]
-    (when history
-      (map unpack-board
-           (str/split history #"_")))))
+(defn unpack-history [history]
+  (map unpack-board
+       (str/split history #"_")))
 
 (defn get-board-state
-  ([] (last (unpack-history)))
-  ([n] (let [history (unpack-history)]
-         (when (< n (count history))
-           (nth history n)))))
+  ([history] (last (unpack-history history)))
+  ([history n] (when (< n (count history))
+                 (nth history n))))
 
 
 
-;; Valid moves for:
-;; - DONE Pawn
-;; - DONE Rook
-;; - DONE Bishop
-;; - DONE Knight
-;; - WAIT King
-;; - DONE Queen
-;; - DONE Castling
-;; - CANCELLED Promotion (covered in pawn validation)
+
+
+
 
 (declare check-detection)
 
@@ -319,6 +310,7 @@
          (not (move-creates-check? move)))))))
           
 
+;; Bishop
 (defn valid-move-B [{:keys [board from to turn] :as move}]
   (let [between-points (between-squares-d from to)
         lookup (partial board-lookup board)]
@@ -347,7 +339,6 @@
          (not (move-creates-check? move)))))
 
 ;; King
-;; TODO add 'check' restriction
 (defn valid-move-K [{:keys [board from to turn] :as move}]
   (let [[x1 y1] from
         [x2 y2] to
@@ -413,9 +404,6 @@
   
 
 
-;; TODO Castling
-;; TODO Promotion
-
 ;; Check
 
 (defn check-detection
@@ -455,10 +443,11 @@
                 (if
                     (check-detection
                      (update-board {:board board :from piece-coord :to v :piece-str p-str})
-                     (if (= turn :white) :black :white)) ;; Simulating the attackers check again
+                     (invert-turn turn)) ;; Simulating the attackers check again
                     (recur vs valid-moves)
                     (recur vs (conj valid-moves v))))))))
 
+;; FIXME
 (defn checkmate-detection [board turn]
   (let [turn               (if (= turn :white) :black :white) ;; simulating next turn
         pieces-coords             (reduce (fn [result piece]
@@ -522,11 +511,16 @@
 (defn rank-file->coords [[rank file]]
   [(- (int rank) 97) (- 8 (- (int file) 48))])
 
+(defn coords->rank-file [[x y]]
+  (let [rank (char (+ x 97))
+        file (- 8 y)]
+    (apply str [rank file])))
+
 (defn construct-move-from-pawn
   "For pawn input"
   [{:keys [board turn to] :as move}]
   (if (and (not (:promotion move)) (= (second to) (if (= turn :white) 0 7)))
-    (println "TODO Disambiguation step - ask for piece to promote to")
+    (assoc move :disambiguation-needed? true)
     (if (:from move) move
         ;; Pawn lookup
         (let [[x2 y2]      to
@@ -544,7 +538,7 @@
                   diag-r [(inc x2) (direction y2 1)]]
               (cond
                 (and (= (lookup diag-l) target-piece) (= (lookup diag-r) target-piece))
-                "TODO Disambiguation step"
+                (assoc move :disambiguation-needed? true)
                 (= (lookup diag-l) target-piece) (assoc move :from diag-l)
                 (= (lookup diag-r) target-piece) (assoc move :from diag-r)
                 :else                            nil)))))))
@@ -564,7 +558,7 @@
                 pos-f      (filter #(valid-m-fn (assoc move :from %)) pos)]
             (cond
               (empty? pos-f) nil
-              (> (count pos-f) 1) (println  "TODO Disambiguation step")
+              (> (count pos-f) 1) (assoc move :disambiguation-needed? true)
               :else (assoc move :from (into [] (first pos-f))))))))
 
 (defn constuct-piece-from [{:keys [board from] :as move}]
@@ -620,7 +614,7 @@
 
             ;; long notation capture, e.g., 'e2xe4'
             (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
-            (parse-input move (str (subs input 0 2) (subs input 3)))
+            (parse-input (assoc move :piece :pawn) (str (subs input 0 2) (subs input 3)))
 
             ;; long notation piece, e.g., 'Rd3d7'
             (= 5 (count input))
@@ -631,16 +625,62 @@
             (parse-input move (str (subs input 0 3) (subs input 4)))
             :else nil)))))
 
+;; TODO - Fix pawn capture notation
+(defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion]}]
+  (let [to (coords->rank-file to)]
+    (cond
+      disambiguation-needed?              (println "TODO notate move")
+      castling                            (case castling
+                                            :kingside  "0-0"
+                                            :queenside "0-0-0")
+      promotion                           (str to (type-keyword-lookup promotion :black))
+      (and (= piece :pawn) (not capture)) to
+      :else
+      (let [piece          (type-keyword-lookup piece :black)
+            check-notation (cond
+                             check     "+"
+                             checkmate "#"
+                             :else     "")]
+        (str piece (when capture "x") to check-notation)))))
+
+(defn piece-captured?
+  "Count number of pieces between board states to see if something was captured."
+  [prev-board nxt-board turn]
+  (let [piece-count (fn [bd pieces]
+                      (reduce (fn [acc piece]
+                                (+ acc (count (board-lookup-type bd piece))))
+                              0
+                              pieces))
+        pieces (if (= turn :white) black-pieces white-pieces)]
+    (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
+
+
+(defn update-game-record! [{:keys [board turn] :as move} gameid]
+  (let [new-board        (update-board move)
+        check-status     (check-detection new-board turn)
+        checkmate-status (when check-status (checkmate-detection new-board turn))
+        capture?         (piece-captured? board new-board turn)
+        move             (-> move
+                             (assoc :check check-status)
+                             (assoc :checkmate checkmate-status)
+                             (assoc :capture capture?)
+                             (assoc :board-packed (pack-board new-board gameid)))
+        notation         (notate-move move)
+        move             (assoc move :notation notation)]
+    (db/update-chess-game move gameid)))
+
+
+
 (comment
   ;; Testing promotion
   (->
-     (parse-input
-      {:board
-       (-> blank-board
-           (update-square [0 1] "p"))
-       :turn :white}
-      "a8Q")
-     (update-board)))
+   (parse-input
+    {:board
+     (-> blank-board
+         (update-square [0 1] "p"))
+     :turn :white}
+    "a8Q")
+   (update-board)))
 
 
 (def sample-game ["e4" "e5"
@@ -654,21 +694,28 @@
                   "Bg5" "b5"
                   "Nxb5" "c6xb5"
                   "Bxb5+" "Nb8d7"
-                  "0-0-0"])
+                  "0-0-0" "Rd8"
+                  "Rxd7" "Rxd7"
+                  "Rd1" "Qe6"
+                  "Bxd7+" "Nxd7"
+                  "Qb8+" "Nxb8"
+                  "Rd8#"])
 
 (comment
   (let [b (atom default-board)
         t (atom :white)
         c (atom 1)]
     (for [move sample-game
-          :let [update (-> {:board @b :turn @t}
-                           (parse-input move)
-                           update-board)
+          :let [m (-> {:board @b :turn @t} (parse-input move))
+                update (update-board m)
                 n-turn (if (= @t :white) :black :white)]]
       (do
-        (println (str @c ". " move))
+        (println m)
+        (println "\n")
+        (println (str @c ". " move " : "))
         (println "\n")
         (println (draw-board update))
+        (println "\n")
         (println "------------------------------------------\n")
         (reset! t n-turn)
         (reset! b update)
@@ -678,30 +725,166 @@
 
 ;; Turn logic
 
+(defn play-turn [req gameid]
+  (let [board (-> (db/get-board-history gameid) get-board-state)
+        turn  (db/get-player-type req gameid)]
+    (if-not (:query req)
+      {:status 10 :meta "Enter your move"}
+
+      (let [move (parse-input {:board board :turn turn} (:query req))]
+        (cond
+          (:disambiguation-needed? move) {:status 10 :meta "Two pieces can move here, please enter full move, e.g., e2e4"}
+          (nil? move) {:status 10 :meta "This move is invalid, please try again"}
+          :else
+          (do
+            (update-game-record! (assoc move :player-input (:query req)) gameid)
+            {:status 30 :meta (str root "/game/" gameid)}))))))
+
+
+
+;; Active Games page
+
+(defn game-summary [game-info]
+  (let [startedby (db/get-username-by-id (:chessgames/startedby game-info))]
+    (str
+     "### Game " (:chessgames/gameid game-info) "\n"
+     "Started by " (or startedby "somebody") " on " (:chessgames/startdate game-info) "\n"
+     "=> " root "/game/" (:chessgames/gameid game-info) " View Game")))
+
+;; TODO message when section is empty, and option to start game from here.
+(defn active-games [req]
+  (let [{:keys [player-games open-games running-games]} (db/get-active-games req)]
+    (->>
+     (str
+      "# Active Games"
+      break
+      "## My Games"
+      break
+      (str/join break
+                (for [g player-games]
+                  (game-summary g)))
+      break
+      "## Open Games"
+      break
+      (str/join break
+                (for [g open-games]
+                  (game-summary g)))
+      break
+      "## Running Games"
+      break
+      (str/join break
+                (for [g running-games]
+                  (game-summary g)))
+      break)
+     (r/success-response r/gemtext))))
 
 
 
 ;; Starting a game
 
+(defn init-game [req colour]
+  (let [gameid (-> (random-uuid)
+                   str
+                   (subs 0 8))
+        c (if (= colour "white") :whiteID :blackID)]
+    (do (db/init-game req (pack-board default-board) c gameid)
+        {:status 30 :meta (str root "/game/" gameid)})))
+
+(defn join-game [req gameid colour]
+  (let [c (if (= colour "white") :whiteID :blackID)]
+    (do (db/player-join req gameid c)
+        {:status 30 :meta (str root "/game/" gameid)})))
+
+(defn start-game-page [req]
+  (let [colour (second (:path-args req))]
+    (if-not colour
+      (->>
+       (str "# Start a new game"
+            break
+            "Choose starting colour: \n"
+            "=> start-game/white White\n"
+            "=> start-game/black Black"
+            break
+            (str "=> " root " Go back"))
+       (r/success-response r/gemtext))
+      (init-game req colour))))
 
 ;; Playing a game
 
+(defn game-page [req gameid]
+  (let [{:chessgames/keys [whiteID
+                           blackID
+                           playerturn
+                           startdate
+                           startedby
+                           boardstate
+                           checkstate
+                           complete
+                           winner
+                           gamemoves]} (first (db/get-gameinfo gameid))
+
+        user        (fn [id] (db/get-username-by-id id))
+        user-colour (if (= (db/client-id req) whiteID) "white" "black")
+        opponent-colour (if (= user-colour "white") "black" "white")
+        last-move   (last (str/split gamemoves #","))]
+    (->>
+     (str
+      "# Game " gameid
+      break
+      "Started by " (user startedby) " on " startdate
+      break
+      "```\n"
+      (-> boardstate get-board-state draw-board)
+      "\n```"
+      break
+      (if (= complete 1)
+        (str (user (if (= winner "white") whiteID blackID)) " (" winner ")" " has won!")
+        (cond
+          winner                                 (str winner " wins!")
+          (and (or (not whiteID) (not blackID))
+               (= startedby (db/client-id req))) "Waiting for other player to join."
+          (not whiteID)                          (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
+          (not blackID)                          (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
+          (= playerturn user-colour)             (str
+                                                  (when (= checkstate 1) "Check! \n")
+                                                  opponent-colour " played " last-move "\n"
+                                                  "It's your turn\n"
+                                                  "=> " root "/play-turn/" gameid " Play turn")
+          :else                                  (str playerturn "'s turn.")))
+      break
+      "=> " root " Back")
+
+     (r/success-response r/gemtext))))
 
 ;; Main Page
 
 (defn main-page [req]
-  (->> (str "# Chess"
-            break
-            "```\n"
-            (draw-board default-board)
-            break
-            (draw-board default-board)
-            "\n```\n")
-       (r/success-response r/gemtext)))
+  (->>
+   (str "# Chess"
+        break
+        "=> / Home"
+        break
+        "=> " root "/active-games Active Games\n"
+        "=> " root "/start-game Start a new Game\n")
+   (r/success-response r/gemtext)))
 
 
 ;; Main/routes
 
 
+
+
 (defn main [req]
-  (main-page req))
+  (if-not (:client-cert req)
+    (reg/register-user)
+
+    (let [route (or (first (:path-args req)) "/")]
+      (case route
+        "/"            (main-page req)
+        "name"         (reg/register-name req root)
+        "active-games" (active-games req)
+        "start-game"   (start-game-page req)
+        "join-game"    (join-game req (second (:path-args req)) (last (:path-args req)))
+        "play-turn"    (play-turn req (second (:path-args req)))
+        "game"         (game-page req (second (:path-args req)))
+        (r/success-response r/gemtext "Nothing here")))))
