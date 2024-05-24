@@ -1,4 +1,3 @@
-(ns app.chess)
 (require '[space-age.db :as db])
 (require '[space-age.responses :as r])
 (require '[space-age.user-registration :as reg])
@@ -625,22 +624,29 @@
             :else nil)))))
 
 ;; TODO - Fix pawn capture notation
-(defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion]}]
-  (let [to (coords->rank-file to)]
-    (cond
-      disambiguation-needed?              (println "TODO notate move")
-      castling                            (case castling
-                                            :kingside  "0-0"
-                                            :queenside "0-0-0")
-      promotion                           (str to (type-keyword-lookup promotion :black))
-      (and (= piece :pawn) (not capture)) to
-      :else
-      (let [piece          (type-keyword-lookup piece :black)
-            check-notation (cond
-                             check     "+"
-                             checkmate "#"
-                             :else     "")]
-        (str piece (when capture "x") to check-notation)))))
+(defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion] :as move}]
+  (if castling (case castling :kingside "0-0" :queenside "0-0-0")
+      (let [to (coords->rank-file to)]
+        (cond
+          disambiguation-needed?              (println "TODO notate move")
+          promotion                           (str to (type-keyword-lookup promotion :black))
+          (and (= piece :pawn) (not capture)) to
+          :else
+          (let [piece          (type-keyword-lookup piece :black)
+                check-notation (cond
+                                 check     "+"
+                                 checkmate "#"
+                                 :else     "")]
+            (str piece (when capture "x") to check-notation))))))
+
+
+(defn format-notation-history [gamemoves]
+  (let [moves (->> (str/split gamemoves #",")
+                   (partition-all 2))]
+    (str/join "\n"
+              (for [i (range (count moves))
+                    :let [m (str (inc i) ". " (str/join " " (nth moves i)))]]
+                m))))
 
 (defn piece-captured?
   "Count number of pieces between board states to see if something was captured."
@@ -654,7 +660,8 @@
     (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
 
 
-(defn update-game-record! [{:keys [board turn] :as move} gameid]
+;; TODO add disambiguation to move, for notation purposes
+(defn update-game-record! [{:keys [board turn gameid] :as move}]
   (let [new-board        (update-board move)
         check-status     (check-detection new-board turn)
         checkmate-status (when check-status (checkmate-detection new-board turn))
@@ -666,7 +673,7 @@
                              (assoc :board-packed (pack-board new-board gameid)))
         notation         (notate-move move)
         move             (assoc move :notation notation)]
-    (db/update-chess-game move gameid)))
+    (db/update-chess-game move)))
 
 
 
@@ -709,7 +716,7 @@
                 update (update-board m)
                 n-turn (if (= @t :white) :black :white)]]
       (do
-        (println @c)
+        (println (str @c ". " (notate-move m)))
         (println "\n")
         (println (checkmate-detection update @t))
         (println (draw-board update))
@@ -718,6 +725,7 @@
         (reset! t n-turn)
         (reset! b update)
         (swap! c inc)))))
+
 
 
 
@@ -738,7 +746,7 @@
           (nil? move) {:status 10 :meta "This move is invalid, please try again"}
           :else
           (do
-            (update-game-record! (assoc move :player-input (:query req)) gameid)
+            (update-game-record! (assoc move :player-input (:query req)))
             {:status 30 :meta (str root "/game/" gameid)}))))))
 
 
@@ -827,7 +835,7 @@
         user        (fn [id] (db/get-username-by-id id))
         user-colour (if (= (db/client-id req) whiteID) "white" "black")
         opponent-colour (if (= user-colour "white") "black" "white")
-        last-move   (last (str/split gamemoves #","))]
+        last-move   (when gamemoves (last (str/split gamemoves #",")))]
     (->>
      (str
       "# Game " gameid
@@ -852,6 +860,8 @@
                                                   "It's your turn\n"
                                                   "=> " root "/play-turn/" gameid " Play turn")
           :else                                  (str playerturn "'s turn.")))
+      break
+      (format-notation-history gamemoves)
       break
       "=> " root " Back")
 
