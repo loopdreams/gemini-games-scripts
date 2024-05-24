@@ -1,3 +1,4 @@
+(ns app.chess)
 (require '[space-age.db :as db])
 (require '[space-age.responses :as r])
 (require '[space-age.user-registration :as reg])
@@ -294,6 +295,7 @@
       (->> (interleave xs ys)
            (partition-all 2)))))
 
+
 ;; Rook
 (defn valid-move-R [{:keys [board from to turn] :as move}]
   (let [[x1 y1] from
@@ -359,14 +361,14 @@
     "n" valid-move-N
     "p" valid-move-P))
 
-(defn valid-move-castling [{:keys [board turn castling] :as move}]
+(defn valid-move-castling [{:keys [board turn castling gameid] :as move}]
   (let [rx1      (if (= castling :kingside) 7 0)
         ry1      (if (= turn :white) 7 0)
         rook     [rx1 ry1]
         new-rook [(if (= castling :kingside) 5 3) ry1]
         king     [4 ry1]
         new-king [(if (= castling :kingside) 6 2) ry1]
-        history  (unpack-history)
+        history  (if gameid (unpack-history (get-board-history! gameid)) [])
         lookup   (partial board-lookup board)]
     (when
         (and
@@ -423,9 +425,7 @@
                  (let [valid-m-fn (valid-m-fn-lookup board p)]
                    (when (valid-m-fn {:board board :from p :to to :turn turn})
                      p))))
-        (do
-          (println "Check!")
-          check)))))
+        check))))
 
 ;; Checkmate
 
@@ -467,7 +467,6 @@
            ps
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
-
 
 (comment
   (checkmate-detection
@@ -574,7 +573,7 @@
     "000" :queenside
     "OOO" :queenside))
 
-(defn parse-input [move input]
+(defn parse-input [{:keys [input gameid] :as move}]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
     (if (castling? input) (-> (assoc move :castling (castling-side input))
                               valid-move-castling)
@@ -587,12 +586,12 @@
 
             ;; pawn capture, e.g., 'xd4'
             (and (= 3 (count input)) (= "x" (str/lower-case (first input))))
-            (parse-input move (str (rest input)))
+            (parse-input (assoc move :input (str (rest input))))
 
             ;; promotion, e.g., 'e8Q'
             (and (= 3 (count input)) (re-find #"[qknrb]" (str/lower-case (last input))))
-            (parse-input  (assoc move :promotion (lookup-piece (str (last input))))
-                          (subs input 0 2))
+            (parse-input  (-> (assoc move :promotion (lookup-piece (str (last input))))
+                              (assoc :input (subs input 0 2))))
 
             ;; piece move, e.g., 'Nf3'
             (= 3 (count input))
@@ -603,7 +602,7 @@
 
             ;; piece move capture, e.g., 'Nxf3'
             (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
-            (parse-input move (str (subs input 0 1) (subs input 2)))
+            (parse-input (assoc move :input (str (subs input 0 1) (subs input 2))))
 
             ;; long algebraic notation, e.g., 'e2e4'
             (= 4 (count input))
@@ -614,15 +613,15 @@
 
             ;; long notation capture, e.g., 'e2xe4'
             (and (= 5 (count input)) (= "x" (str/lower-case (nth input 2))))
-            (parse-input (assoc move :piece :pawn) (str (subs input 0 2) (subs input 3)))
+            (parse-input (-> (assoc move :piece :pawn) (assoc :input (str (subs input 0 2) (subs input 3)))))
 
             ;; long notation piece, e.g., 'Rd3d7'
             (= 5 (count input))
-            (parse-input (assoc move :piece (lookup-piece (first input))) (str (rest input)))
+            (parse-input (-> (assoc move :piece (lookup-piece (first input))) (assoc :input (str (rest input)))))
 
             ;; long notation piece capture, e.g., 'Rd3xd7'
             (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
-            (parse-input move (str (subs input 0 3) (subs input 4)))
+            (parse-input (assoc move :input (str (subs input 0 3) (subs input 4))))
             :else nil)))))
 
 ;; TODO - Fix pawn capture notation
@@ -706,14 +705,13 @@
         t (atom :white)
         c (atom 1)]
     (for [move sample-game
-          :let [m (-> {:board @b :turn @t} (parse-input move))
+          :let [m (-> {:board @b :turn @t :input move} parse-input)
                 update (update-board m)
                 n-turn (if (= @t :white) :black :white)]]
       (do
-        (println m)
+        (println @c)
         (println "\n")
-        (println (str @c ". " move " : "))
-        (println "\n")
+        (println (checkmate-detection update @t))
         (println (draw-board update))
         (println "\n")
         (println "------------------------------------------\n")
@@ -731,7 +729,10 @@
     (if-not (:query req)
       {:status 10 :meta "Enter your move"}
 
-      (let [move (parse-input {:board board :turn turn} (:query req))]
+      (let [move (parse-input {:board board
+                               :turn turn
+                               :input (:query req)
+                               :gameid gameid})]
         (cond
           (:disambiguation-needed? move) {:status 10 :meta "Two pieces can move here, please enter full move, e.g., e2e4"}
           (nil? move) {:status 10 :meta "This move is invalid, please try again"}
