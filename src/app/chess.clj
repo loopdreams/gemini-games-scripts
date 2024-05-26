@@ -130,9 +130,6 @@
    flatten
    (partition-all 2)))
 
-#_(defn occupied? [board [x y]]
-    (not= blank-marker (board-lookup board [x y])))
-
 (defn update-square [board [x y] & piece]
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
@@ -157,9 +154,6 @@
 
 
 ;; Board DB Interaction
-
-;; For testing
-#_(def board-store (atom nil))
 
 
 (defn get-board-history! [gameid]
@@ -206,6 +200,7 @@
 
 (declare check-detection)
 
+;; Helpers
 (defn player-pieces [turn]
   (if (= turn :white) white-pieces black-pieces))
 
@@ -311,6 +306,13 @@
          (not (move-creates-check? move)))))))
           
 
+(defn print-move [fn-name {:keys [board from to turn]}]
+  (println fn-name)
+  (println (str "From: " (apply str from)))
+  (println (str "To: " (apply str to)))
+  (println (str "Turn: " turn))
+  (println (draw-board board)))
+
 ;; Bishop
 (defn valid-move-B [{:keys [board from to turn] :as move}]
   (let [between-points (between-squares-d from to)
@@ -324,6 +326,7 @@
 
 ;; Queen
 (defn valid-move-Q [{:keys [board from to turn] :as move}]
+  (print-move "move-Q" move)
   (let [[x1 y1] from
         [x2 y2] to
         lookup (partial board-lookup board)
@@ -473,7 +476,7 @@
    (-> blank-board
        (update-square [0 3] "K")
        (update-square [2 3] "q")
-       (update-square [7 7] "k")
+       (update-square [7 6] "k")
        (update-square [2 1] "n")
        (update-square [4 0] "b")
        (update-square [2 7] "Q"))
@@ -572,6 +575,7 @@
     "000" :queenside
     "OOO" :queenside))
 
+;; TODO handle this input 'dxe4' - this is a pawn capturing e4 when there are two pawns (using rank to disambiguate), caused error on input.
 (defn parse-input [{:keys [input gameid] :as move}]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
     (if (castling? input) (-> (assoc move :castling (castling-side input))
@@ -707,6 +711,18 @@
                   "Qb8+" "Nxb8"
                   "Rd8#"])
 
+(def sample-game-2 ["e4" "c6"
+                    "d4" "d5"
+                    "Nc3" "xe4"
+                    "Nxe4" "Nf6"
+                    "Qd3" "e5"
+                    "xe5" "Qa5+"
+                    "Bd2" "Qxe5"
+                    "0-0-0" "Nxe4"
+                    "Qd8+" "Kxd8"
+                    "Bg5+" "Kc7"
+                    "Bd8"])
+
 (comment
   (let [b (atom default-board)
         t (atom :white)
@@ -727,7 +743,53 @@
         (swap! c inc)))))
 
 
+(def test-board
+  (last
+   (let [b (atom default-board)
+         t (atom :white)
+         c (atom 1)]
+     (for [move sample-game-2
+           :let [m (-> {:board @b :turn @t :input move} parse-input)
+                 update (update-board m)
+                 n-turn (if (= @t :white) :black :white)]]
+       (do
+         (reset! t n-turn)
+         (swap! c inc)
+         (reset! b update))))))
 
+(comment
+  (->
+   (parse-input {:board test-board :turn :white :input "Bd8"})
+   (update-board)
+   (checkmate-detection :white)))
+
+(comment
+  (checkmate-detection test-board :white))
+
+(comment
+  (draw-board (clojure.edn/read-string "[[R N B b · B · R] [P P K · · P P P] [· · P · · · · ·] [· · · · Q · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
+  (draw-board (clojure.edn/read-string "[[R N B · · B · R] [P P b · · P P P] [· · P · · · · ·] [· · · Q · · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
+  (draw-board (clojure.edn/read-string "[[R N B b · B · R] [P P K · · P P P] [· · P · · · · ·] [· · · · Q · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
+  (draw-board (clojure.edn/read-string "[[R N B · · B · R] [P P b · · P P P] [· · P · · · · ·] [· · · · · · Q ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]")))
+
+(comment
+  (checkmate-detection
+   (-> blank-board
+       (update-square [3 0] "b")
+       (update-square [3 7] "r")
+       (update-square [2 7] "k")
+
+       (update-square [2 1] "K")
+       (update-square [2 0] "B")
+       (update-square [1 0] "N")
+       (update-square [1 1] "P")
+       (update-square [2 2] "P")
+
+       (update-square [4 3] "Q"))
+   :white))
+
+(comment
+  (draw-board (clojure.edn/read-string "[[· N B · · · · ·] [· P b · · · · ·] [· · P · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · Q r · · · ·]]")))
 
 ;; Turn logic
 
@@ -861,7 +923,7 @@
                                                   "=> " root "/play-turn/" gameid " Play turn")
           :else                                  (str playerturn "'s turn.")))
       break
-      (format-notation-history gamemoves)
+      (when gamemoves (format-notation-history gamemoves))
       break
       "=> " root " Back")
 
