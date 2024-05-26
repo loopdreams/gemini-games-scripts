@@ -177,8 +177,6 @@
           (str/join " ")
           (str history "_")))))
 
-
-
 (defn unpack-board [board]
   (->> (str/split board #" ")
        (mapv #(str/split % #":"))))
@@ -194,12 +192,6 @@
 
 
 
-
-
-
-
-(declare check-detection)
-
 ;; Helpers
 (defn player-pieces [turn]
   (if (= turn :white) white-pieces black-pieces))
@@ -209,9 +201,17 @@
 
 (defn valid-to
   "Move is valid if space empty or occupied by opponent piece"
-  [lookup to turn]
-  (or (= blank-marker (lookup to))
-      ((opponent-pieces turn) (lookup to))))
+  [{:keys [board to turn]}]
+  (let [p (board-lookup board to)]
+    (or (= blank-marker p)
+        ((opponent-pieces turn) p))))
+
+(defn valid-from
+  "Move is valid if 'from' contains the same piece referenced in 'piece'"
+  [{:keys [board from turn piece]}]
+  (when piece
+    (let [p (type-keyword-lookup piece turn)]
+      (= p (board-lookup board from)))))
 
 (defn diagonal? [[x1 y1] [x2 y2]]
   (= (abs (- x2 x1))
@@ -219,14 +219,6 @@
 
 (defn invert-turn [turn]
   (if (= turn :white) :black :white))
-
-(defn move-creates-check? [{:keys [board turn from] :as move}]
-  (let [n-turn (invert-turn turn)
-        piece-str (board-lookup board from)]
-    (-> move
-        (assoc :piece-str piece-str)
-        update-board
-        (check-detection n-turn))))
 
 ;; Pawn
 (defn valid-move-P [{:keys [board from to turn] :as move}]
@@ -248,28 +240,20 @@
         
        (opponent-pieces (lookup to)) (or (= [(dec x1) (direction y1 1)] to)
                                          (= [(inc x1) (direction y1 1)] to))
-       :else                         false)
-     (not (move-creates-check? move)))))
-
+       :else                         false))))
 
 ;; Knight
-(defn valid-move-N [{:keys [board from to turn] :as move}]
-  (let [[x1 y1]         from
-        lookup          (partial board-lookup board)]
-    (and
-     (= (if (= turn :white) white-N black-N)
-        (lookup from))
-     (or
-      (= to [(+ x1 2) (- y1 1)])
-      (= to [(- x1 2) (- y1 1)])
-      (= to [(+ x1 2) (+ y1 1)])
-      (= to [(- x1 2) (+ y1 1)])
-      (= to [(+ x1 1) (+ y1 2)])
-      (= to [(- x1 1) (+ y1 2)])
-      (= to [(+ x1 1) (- y1 2)])
-      (= to [(- x1 1) (- y1 2)]))
-     (valid-to lookup to turn)
-     (not (move-creates-check? move)))))
+(defn valid-move-N [{:keys [from to]}]
+  (let [[x1 y1]         from]
+    (or
+     (= to [(+ x1 2) (- y1 1)])
+     (= to [(- x1 2) (- y1 1)])
+     (= to [(+ x1 2) (+ y1 1)])
+     (= to [(- x1 2) (+ y1 1)])
+     (= to [(+ x1 1) (+ y1 2)])
+     (= to [(- x1 1) (+ y1 2)])
+     (= to [(+ x1 1) (- y1 2)])
+     (= to [(- x1 1) (- y1 2)]))))
 
 (defn between-squares-h [[x1 y1] [x2 y2]]
   (-> (for [i (apply range (sort (if (= x1 x2) [y1 y2] [x1 x2])))]
@@ -297,14 +281,8 @@
         lookup  (partial board-lookup board)]
     (when (or (= x1 x2) (= y1 y2))
       (let [between-squares (between-squares-h from to)]
-        (and
-         (= (if (= turn :white) white-R black-R)
-            (lookup from))
-         (or (every? #(= blank-marker %) (map lookup between-squares))
-             (empty? between-squares))
-         (valid-to lookup to turn)
-         (not (move-creates-check? move)))))))
-          
+        (or (every? #(= blank-marker %) (map lookup between-squares))
+            (empty? between-squares))))))
 
 (defn print-move [fn-name {:keys [board from to turn]}]
   (println fn-name)
@@ -314,45 +292,38 @@
   (println (draw-board board)))
 
 ;; Bishop
-(defn valid-move-B [{:keys [board from to turn] :as move}]
+(defn valid-move-B [{:keys [board from to]}]
   (let [between-points (between-squares-d from to)
         lookup (partial board-lookup board)]
+    ;; Note: 'between-squares-d' checks to see if the points are diagonal
     (and between-points
-         (or (every? #(= blank-marker %) (map lookup between-points))
-             (empty? between-points))
-         (valid-to lookup to turn)
-         (not (move-creates-check? move)))))
-         
+         (or (empty? between-points)
+             (every? #(= blank-marker %) (map lookup between-points))))))
 
 ;; Queen
-(defn valid-move-Q [{:keys [board from to turn] :as move}]
-  (print-move "move-Q" move)
-  (let [[x1 y1] from
-        [x2 y2] to
-        lookup (partial board-lookup board)
-        between-squares (if (or (= x1 x2)
-                                (= y1 y2))
-                          (between-squares-h from to)
-                          (between-squares-d from to))]
-    (and (= (if (= turn :white) white-Q black-Q)
-            (lookup from))
-         between-squares
-         (or (empty? between-squares)
-             (every? #(= blank-marker %) (map lookup between-squares)))
-         (valid-to lookup to turn)
-         (not (move-creates-check? move)))))
+#_(defn valid-move-Q [{:keys [board from to turn] :as move}]
+    (let [[x1 y1] from
+          [x2 y2] to
+          lookup (partial board-lookup board)
+          between-squares (if (or (= x1 x2)
+                                  (= y1 y2))
+                            (between-squares-h from to)
+                            (between-squares-d from to))]
+      (and between-squares
+           (or (empty? between-squares)
+               (every? #(= blank-marker %) (map lookup between-squares))))))
+
+(defn valid-move-Q [move]
+  (or (valid-move-R move)
+      (valid-move-B move)))
 
 ;; King
-(defn valid-move-K [{:keys [board from to turn] :as move}]
+(defn valid-move-K [{:keys [from to]}]
   (let [[x1 y1] from
-        [x2 y2] to
-        lookup (partial board-lookup board)]
-    (and (= (if (= turn :white) white-K black-K) (lookup from))
-         (or (and (= 1 (abs (- x2 x1))) (= y2 y1))
-             (and (= 1 (abs (- y2 y1))) (= x2 x1))
-             (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))
-         (valid-to (partial board-lookup board) to turn)
-         (not (move-creates-check? move)))))
+        [x2 y2] to]
+    (or (and (= 1 (abs (- x2 x1))) (= y2 y1))
+        (and (= 1 (abs (- y2 y1))) (= x2 x1))
+        (and (= 1 (abs (- x2 x1))) (= 1 (abs (- y2 y1)))))))
 
 (defn valid-m-fn-lookup [board p]
   (case (str/lower-case (board-lookup board p))
@@ -383,11 +354,12 @@
                  (map #(board-lookup % rook) history))
          (every? #(= (if (= turn :white) white-K black-K) %)
                  (map #(board-lookup % king) history)))
-      (-> move
-          (assoc :from-k king)
-          (assoc :to-k new-king)
-          (assoc :from-r rook)
-          (assoc :to-r new-rook)))))
+        (-> move
+            (assoc :from-k king)
+            (assoc :to-k new-king)
+            (assoc :from-r rook)
+            (assoc :to-r new-rook)))))
+
 
 (comment
   (valid-move-castling
@@ -429,6 +401,15 @@
                      p))))
         check))))
 
+
+(defn move-creates-check? [{:keys [board turn from] :as move}]
+  (let [n-turn (invert-turn turn)
+        piece-str (board-lookup board from)]
+    (-> move
+        (assoc :piece-str piece-str)
+        update-board
+        (check-detection n-turn))))
+
 ;; Checkmate
 
 (defn move-out-of-check?
@@ -449,7 +430,6 @@
                     (recur vs valid-moves)
                     (recur vs (conj valid-moves v))))))))
 
-;; FIXME
 (defn checkmate-detection [board turn]
   (let [turn               (if (= turn :white) :black :white) ;; simulating next turn
         pieces-coords             (reduce (fn [result piece]
@@ -576,6 +556,7 @@
     "OOO" :queenside))
 
 ;; TODO handle this input 'dxe4' - this is a pawn capturing e4 when there are two pawns (using rank to disambiguate), caused error on input.
+;; TODO hanlde an incorrect input like c3456, which tries to match 'c'
 (defn parse-input [{:keys [input gameid] :as move}]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
     (if (castling? input) (-> (assoc move :castling (castling-side input))
@@ -629,6 +610,8 @@
 
 ;; TODO - Fix pawn capture notation
 (defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion] :as move}]
+  (println checkmate)
+  (println check)
   (if castling (case castling :kingside "0-0" :queenside "0-0-0")
       (let [to (coords->rank-file to)]
         (cond
@@ -638,10 +621,13 @@
           :else
           (let [piece          (type-keyword-lookup piece :black)
                 check-notation (cond
-                                 check     "+"
                                  checkmate "#"
+                                 check     "+"
                                  :else     "")]
             (str piece (when capture "x") to check-notation))))))
+
+
+       
 
 
 (defn format-notation-history [gamemoves]
@@ -678,6 +664,28 @@
         notation         (notate-move move)
         move             (assoc move :notation notation)]
     (db/update-chess-game move)))
+
+
+
+;; TODO further validation of castling needed?
+(defn validate-move [m]
+  (if-not (:castling m)
+    (and m
+         (valid-to m)
+         (valid-from m)
+         (not (move-creates-check? m)))
+    true))
+
+
+
+(comment
+  (let [b (->
+           (parse-input
+            {:board default-board
+             :turn :white
+             :input "e4"}))
+        new-b (update-board b)]
+    (parse-input {:board new-b :turn :black :input "e5"})))
 
 
 
@@ -723,16 +731,27 @@
                     "Bg5+" "Kc7"
                     "Bd8"])
 
+(def sample-game-3 ["e4" "e5"
+                    "Nf3" "Nc6"
+                    "Bc4" "Bc5"
+                    "b4" "Bxb4"
+                    "c3" "Ba5"
+                    "d4" "Pxd4"
+                    "0-0"])
+
+
 (comment
   (let [b (atom default-board)
         t (atom :white)
         c (atom 1)]
-    (for [move sample-game
+    (for [move sample-game-3
           :let [m (-> {:board @b :turn @t :input move} parse-input)
                 update (update-board m)
                 n-turn (if (= @t :white) :black :white)]]
       (do
         (println (str @c ". " (notate-move m)))
+        (println "\n")
+        (println (when (check-detection update @t) "Check!"))
         (println "\n")
         (println (checkmate-detection update @t))
         (println (draw-board update))
@@ -802,10 +821,11 @@
       (let [move (parse-input {:board board
                                :turn turn
                                :input (:query req)
-                               :gameid gameid})]
+                               :gameid gameid})
+            valid? (validate-move move)]
         (cond
           (:disambiguation-needed? move) {:status 10 :meta "Two pieces can move here, please enter full move, e.g., e2e4"}
-          (nil? move) {:status 10 :meta "This move is invalid, please try again"}
+          (or (nil? move) (not valid?)) {:status 10 :meta "This move is invalid, please try again"}
           :else
           (do
             (update-game-record! (assoc move :player-input (:query req)))
