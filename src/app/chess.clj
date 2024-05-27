@@ -608,23 +608,29 @@
             (parse-input (assoc move :input (str (subs input 0 3) (subs input 4))))
             :else nil)))))
 
-;; TODO - Fix pawn capture notation
-(defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion] :as move}]
-  (println checkmate)
-  (println check)
-  (if castling (case castling :kingside "0-0" :queenside "0-0-0")
-      (let [to (coords->rank-file to)]
-        (cond
-          disambiguation-needed?              (println "TODO notate move")
-          promotion                           (str to (type-keyword-lookup promotion :black))
-          (and (= piece :pawn) (not capture)) to
-          :else
-          (let [piece          (type-keyword-lookup piece :black)
-                check-notation (cond
-                                 checkmate "#"
-                                 check     "+"
-                                 :else     "")]
-            (str piece (when capture "x") to check-notation))))))
+
+(defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion from] :as move}]
+  (let [check-notation (cond
+                         (= checkmate :checkmate) "#"
+                         check                    "+"
+                         :else                    "")]
+    (if castling (str (case castling :kingside "0-0" :queenside "0-0-0")
+                      check-notation)
+        (let [to   (coords->rank-file to)
+              from (coords->rank-file from)]
+          (cond
+            disambiguation-needed? (println "TODO notate move")
+            promotion              (str to (type-keyword-lookup promotion :black)
+                                        check-notation)
+            (and (= piece :pawn)
+                 (not capture))    to
+            (= piece :pawn)        (str from "x" to check-notation)
+            :else
+            (let [piece (type-keyword-lookup piece :black)]
+              (str piece (when capture "x") to check-notation)))))))
+
+
+  
 
 
        
