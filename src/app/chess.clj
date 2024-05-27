@@ -524,7 +524,6 @@
                 (= (lookup diag-r) target-piece) (assoc move :from diag-r)
                 :else                            nil)))))))
 
-
 (defn construct-move-from [{:keys [board turn piece from] :as move}]
   (if from move
       (if (= piece :pawn) (construct-move-from-pawn move)
@@ -619,7 +618,12 @@
         (let [to   (coords->rank-file to)
               from (coords->rank-file from)]
           (cond
-            disambiguation-needed? (println "TODO notate move")
+            disambiguation-needed? (str (when (not= piece :pawn)
+                                          (type-keyword-lookup piece :black))
+                                        from
+                                        (when capture "x")
+                                        to
+                                        check-notation)
             promotion              (str to (type-keyword-lookup promotion :black)
                                         check-notation)
             (and (= piece :pawn)
@@ -628,12 +632,6 @@
             :else
             (let [piece (type-keyword-lookup piece :black)]
               (str piece (when capture "x") to check-notation)))))))
-
-
-  
-
-
-       
 
 
 (defn format-notation-history [gamemoves]
@@ -656,17 +654,38 @@
     (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
 
 
-;; TODO add disambiguation to move, for notation purposes
+(defn disambiguation-needed? [{:keys [to board turn] :as move}]
+  (let [valid-m-fn     (fn [piece] (case piece
+                                     :king   valid-move-K
+                                     :queen  valid-move-Q
+                                     :bishop valid-move-B
+                                     :rook   valid-move-R
+                                     :knight valid-move-N
+                                     :pawn   valid-move-P))
+        lookup-type    (partial board-lookup-type board)
+        lookup         (partial board-lookup board)
+        possible-froms (->> (map lookup-type (player-pieces turn))
+                            (reduce concat))
+        valid-froms    (->>
+                        (for [p    possible-froms
+                              :let [piece (-> (lookup p) lookup-piece)]]
+                          ((valid-m-fn piece) (assoc move :from p)))
+                        (filter true?))]
+    (not= 1 (count valid-froms))))
+
+
 (defn update-game-record! [{:keys [board turn gameid] :as move}]
   (let [new-board        (update-board move)
         check-status     (check-detection new-board turn)
         checkmate-status (when check-status (checkmate-detection new-board turn))
         capture?         (piece-captured? board new-board turn)
+        disambiguate?    (disambiguation-needed? move)
         move             (-> move
                              (assoc :check check-status)
                              (assoc :checkmate checkmate-status)
                              (assoc :capture capture?)
-                             (assoc :board-packed (pack-board new-board gameid)))
+                             (assoc :board-packed (pack-board new-board gameid))
+                             (assoc :disambiguation-needed? disambiguate?))
         notation         (notate-move move)
         move             (assoc move :notation notation)]
     (db/update-chess-game move)))
