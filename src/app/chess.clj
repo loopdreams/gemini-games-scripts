@@ -6,7 +6,8 @@
 (def root "/src/app/chess")
 (def break "\n\n")
 
-;; Pieces
+
+;;;; Pieces
 (def blank-marker (str (char 183)))
 
 (def white-K "k")
@@ -59,7 +60,7 @@
     "n" :knight
     "p" :pawn))
 
-;; Make board
+;;;; Make board
 
 (defn draw-board [board]
   (let [col-ref ["a" "b" "c" "d" "e" "f" "g" "h"]
@@ -82,7 +83,7 @@
      h-rows)))
 
 
-;; Game logic
+;;;; Game logic
 ;; Game logic map:
 ;; {:board board-state
 ;; :from coords-from (e.g., [0 0])
@@ -133,7 +134,7 @@
         (-> (update-square board from)
             (update-square to piece-str)))))
 
-;; Board DB Interaction
+;;; Board History
 
 (defn get-board-history! [gameid]
   (db/get-board-history gameid))
@@ -171,12 +172,14 @@
      (when (< n (count hist))
        (nth hist n)))))
 
-;; Helpers
+;;; Helpers
 (defn player-pieces [turn]
   (if (= turn :white) white-pieces black-pieces))
 
 (defn opponent-pieces [turn]
   (if (= turn :white) black-pieces white-pieces))
+
+;;; Piece Mechanics/validation
 
 (defn valid-to
   "Move is valid if space empty or occupied by opponent piece"
@@ -271,6 +274,7 @@
          (or (empty? between-points)
              (every? #(= blank-marker %) (map lookup between-points))))))
 
+;; Queen
 (defn valid-move-Q [move]
   (or (valid-move-R move)
       (valid-move-B move)))
@@ -318,7 +322,7 @@
             (assoc :from-r rook)
             (assoc :to-r new-rook)))))
 
-;; Check
+;;; Check
 
 (defn check-detection
   "Goes through attackers (turn) pieces, and sees if any can reach the position
@@ -349,7 +353,7 @@
         update-board
         (check-detection n-turn))))
 
-;; Checkmate
+;;; Checkmate
 (defn move-out-of-check?
   "Updates board with defender (turn) possible move, then checks based on attacker positions
   if check still holds."
@@ -388,7 +392,7 @@
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
 
-;; Input Handling
+;;;; Input Handling
 ;; Algebraic notation:
 ;; - Nc6
 ;; - Nxc6
@@ -522,6 +526,7 @@
             :else nil)))))
 
 
+;;;; Notation
 (defn notate-move [{:keys [piece to castling disambiguation-needed? check checkmate capture promotion from] :as move}]
   (let [check-notation (cond
                          (= checkmate :checkmate) "#"
@@ -591,6 +596,7 @@
     (not= 1 (count valid-froms))))
 
 
+;;;; Update game state
 (defn update-game-record! [{:keys [board turn gameid] :as move}]
   (let [new-board        (update-board move)
         check-status     (check-detection new-board turn)
@@ -705,7 +711,8 @@
         (reset! b update)
         (swap! c inc)))))
 
-;; Turn logic
+;;;; UI
+;;; Turn Logic
 
 (defn play-turn [req gameid]
   (let [board (-> (db/get-board-history gameid) get-board-state)
@@ -726,7 +733,7 @@
             (update-game-record! (assoc move :player-input (:query req)))
             {:status 30 :meta (str root "/game/" gameid)}))))))
 
-;; Active Games page
+;;; Active Games page
 
 (defn game-summary [game-info]
   (let [startedby (db/get-username-by-id (:chessgames/startedby game-info))]
@@ -764,7 +771,7 @@
 
 
 
-;; Starting a game
+;;; Starting a game
 
 (defn init-game [req colour]
   (let [gameid (-> (random-uuid)
@@ -793,7 +800,7 @@
        (r/success-response r/gemtext))
       (init-game req colour))))
 
-;; Playing a game
+;;; Playing a game
 
 (defn game-page [req gameid]
   (let [{:chessgames/keys [whiteID
@@ -873,7 +880,7 @@
      (str/join break)
      (r/success-response r/gemtext))))
 
-;; Main Page
+;;; Main Page
 
 (defn main-page [req]
   (->>
@@ -886,7 +893,7 @@
    (r/success-response r/gemtext)))
 
 
-;; Main/routes
+;;;; Main/routes
 
 (defn main [req]
   (if-not (:client-cert req)
