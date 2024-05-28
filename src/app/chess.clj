@@ -654,7 +654,7 @@
 
 
 ;;;; Update game state
-(defn update-game-record! [{:keys [board turn gameid] :as move}]
+(defn update-game-record! [req {:keys [board turn gameid] :as move}]
   (let [new-board        (update-board move)
         check-status     (check-detection new-board turn)
         checkmate-status (when check-status (checkmate-detection new-board turn))
@@ -668,7 +668,7 @@
                              (assoc :disambiguation-needed? disambiguate?))
         notation         (notate-move move)
         move             (assoc move :notation notation)]
-    (db/update-chess-game move)))
+    (db/update-chess-game req move)))
 
 ;;;; Testing
 ;; TODO delete these after testing
@@ -751,8 +751,36 @@
           (or (nil? move) (not valid?)) {:status 10 :meta "This move is invalid, please try again"}
           :else
           (do
-            (update-game-record! (assoc move :player-input (:query req)))
+            (update-game-record! req (assoc move :player-input (:query req)))
             {:status 30 :meta (str root "/game/" gameid)}))))))
+
+
+(defn resign [req gameid]
+  (if-not (:query req)
+    {:status 10 :meta "Are you sure you want to resign? [Y/N]"}
+    (let [resp (-> (str/lower-case (:query req))
+                   (subs 0 1))
+          game-redirect {:status 30 :meta (str root "/game/" gameid)}]
+      (cond
+        (= resp "y") (do (db/resign-game req gameid)
+                         game-redirect)
+        (= resp "n") game-redirect
+        :else {:status 10 :meta "Please enter 'Y' or 'N'"}))))
+
+(defn offer-draw [req gameid]
+  (do
+   (db/draw-offered req gameid)
+   {:status 30 :meta (str root "/game/" gameid)}))
+
+(defn accept-draw [req gameid]
+  (do
+   (db/draw-accepted req gameid)
+   {:status 30 :meta (str root "/game/" gameid)}))
+
+(defn reject-draw [req gameid]
+  (do
+    (db/draw-rejected req gameid)
+    {:status 30 :meta (str root "/game/" gameid)}))
 
 ;;; Active Games page
 
@@ -776,11 +804,13 @@
      (str
       "# Active Games"
       break
+      (str "=> " root " Back")
+      break
       "## My Games"
       break
-      (str "=> " root "/start-game Start a new game")
-      break
       (game-list player-games)
+      break
+      (str "=> " root "/start-game Start a new game")
       break
       "## Open Games"
       break
@@ -835,12 +865,14 @@
                            checkstate
                            complete
                            winner
-                           gamemoves]} (first (db/get-gameinfo gameid))
+                           gamemoves
+                           drawstatus
+                           resignstatus]} (first (db/get-gameinfo gameid))
 
-        user        (fn [id] (db/get-username-by-id id))
-        user-colour (if (= (db/client-id req) whiteID) "white" "black")
+        user            (fn [id] (db/get-username-by-id id))
+        user-colour     (if (= (db/client-id req) whiteID) "white" "black")
         opponent-colour (if (= user-colour "white") "black" "white")
-        last-move   (when gamemoves (last (str/split gamemoves #",")))]
+        last-move       (when gamemoves (last (str/split gamemoves #",")))]
     (->>
      (str
       "# Game " gameid
@@ -853,20 +885,38 @@
       (-> boardstate get-board-state draw-board)
       "\n```"
       break
-      (if (= complete 1)
-        (str (user (if (= winner "white") whiteID blackID)) " (" winner ")" " has won!")
-        (cond
-          winner                                 (str winner " wins!")
-          (and (or (not whiteID) (not blackID))
-               (= startedby (db/client-id req))) "Waiting for other player to join."
-          (not whiteID)                          (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
-          (not blackID)                          (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
-          (= playerturn user-colour)             (str
-                                                  (when (= checkstate 1) "Check! \n")
-                                                  opponent-colour " played " last-move "\n"
-                                                  "It's your turn\n"
-                                                  "=> " root "/play-turn/" gameid " Play turn")
-          :else                                  (str playerturn "'s turn.")))
+      (when (= checkstate 1) "Check!")
+      break
+      (cond
+        (and (or (not whiteID)
+                 (not blackID))
+             (= startedby
+                (db/client-id req))) "Waiting for other player to join."
+        (not whiteID) (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
+        (not blackID) (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
+        :else
+        (if-not (or (= (db/client-id req) whiteID)
+                    (= (db/client-id req) blackID))
+          (when (= complete 0) (str "Game ongoing, being played by " (user whiteID) " (white) and " (user blackID) " (black)."))
+          (cond
+            (and (= drawstatus 1)
+                 (= user-colour playerturn)) "You have offered a draw, waiting for opponent to accept."
+            (= drawstatus 1)             (str "A draw has been offered, do you accept?\n"
+                                              (str "=> " root "/draw-accept/" gameid " Accept draw\n")
+                                              (str "=> " root "/draw-reject/" gameid " Reject draw"))
+            (= drawstatus 2)             (str "Game tied!")
+            (= resignstatus 1)           (str (user (if (= winner "white") blackID whiteID)) " resigned. "
+                                              (user (if (= winner "white") whiteID blackID)) "  (" winner ") has won!")
+            (= complete 1)               (str (user (if (= winner "white") whiteID blackID)) " (" winner ")" " has won!")
+            (= playerturn user-colour)
+            (str
+             (when last-move (str (str/capitalize opponent-colour) " played " last-move "\n"))
+             "It's your turn\n"
+             "=> " root "/play-turn/" gameid " Play turn\n"
+             (when (= 0 drawstatus) (str "=> " root "/draw-offer/" gameid " Offer draw\n"))
+             (str "=> " root "/resign/" gameid " Resign game"))
+            :else
+            (str (str/capitalize playerturn) "'s turn."))))
       break
       (when gamemoves (format-notation-history gamemoves))
       break
@@ -931,6 +981,10 @@
         "start-game"   (start-game-page req)
         "join-game"    (join-game req gameid game-r)
         "play-turn"    (play-turn req gameid)
+        "resign"       (resign req gameid)
+        "draw-offer"   (offer-draw req gameid)
+        "draw-accept"  (accept-draw req gameid)
+        "draw-reject"  (reject-draw req gameid)
         "game"         (game-page req gameid)
         "playback"     (game-playback-page req gameid game-r)
         (r/success-response r/gemtext "Nothing here")))))
