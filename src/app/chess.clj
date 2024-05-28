@@ -84,13 +84,25 @@
 
 
 ;;;; Game logic
-;; Game logic map:
+;; Game data ('move') is handled via a clojure map, with the following available keys:
 ;; {:board board-state
 ;; :from coords-from (e.g., [0 0])
 ;; :to coords-to (e.g., [0 1])
 ;; :turn e.g., :white
 ;; :piece piece-name e.g., :king
-;; :piece-str piece-string e.g., "k"}
+;; :piece-str piece-string e.g., "k"
+;; :diambiguation-needed? boolean - used both for prompting the user to disambiguated and for notation purposes
+;; :capture boolean - used for notation purposes
+;; :check boolean - used for UI and notation purposes
+;; :checkmate either :checkmate or :not-checkmate, same purpose as :check
+;; :castling boolean
+;; :from-k
+;; :to-k
+;; :from-r
+;; :to-r - this and the above 3 are coords, used for updating the board following a castle
+;; :promotion boolean
+;; :player-input string - literal player input
+;; :board-packed - string representation of board history, used by DB}
 
 (defn board-lookup
   "Return the string (piece) at coordinates x and y."
@@ -179,6 +191,9 @@
 (defn opponent-pieces [turn]
   (if (= turn :white) black-pieces white-pieces))
 
+(defn invert-turn [turn]
+  (if (= turn :white) :black :white))
+
 ;;; Piece Mechanics/validation
 
 (defn valid-to
@@ -199,8 +214,23 @@
   (= (abs (- x2 x1))
      (abs (- y2 y1))))
 
-(defn invert-turn [turn]
-  (if (= turn :white) :black :white))
+(defn between-squares-h [[x1 y1] [x2 y2]]
+  (-> (for [i (apply range (sort (if (= x1 x2) [y1 y2] [x1 x2])))]
+        (if (= x1 x2) [x1 i] [i y1]))
+      rest))
+
+(defn between-squares-d [[x1 y1] [x2 y2]]
+  (when (diagonal? [x1 y1] [x2 y2])
+    (let [slope (/ (- y2 y1)
+                   (- x2 x1))
+          xs (rest (apply range (sort [x1 x2])))
+          ys (apply range (sort [y1 y2]))
+
+          ys (if (= slope -1)
+               (drop-last (reverse ys))
+               (rest ys))]
+      (->> (interleave xs ys)
+           (partition-all 2)))))
 
 ;; Pawn
 (defn valid-move-P [{:keys [board from to turn] :as move}]
@@ -236,24 +266,6 @@
      (= to [(- x1 1) (+ y1 2)])
      (= to [(+ x1 1) (- y1 2)])
      (= to [(- x1 1) (- y1 2)]))))
-
-(defn between-squares-h [[x1 y1] [x2 y2]]
-  (-> (for [i (apply range (sort (if (= x1 x2) [y1 y2] [x1 x2])))]
-        (if (= x1 x2) [x1 i] [i y1]))
-      rest))
-
-(defn between-squares-d [[x1 y1] [x2 y2]]
-  (when (diagonal? [x1 y1] [x2 y2])
-    (let [slope (/ (- y2 y1)
-                   (- x2 x1))
-          xs (rest (apply range (sort [x1 x2])))
-          ys (apply range (sort [y1 y2]))
-          
-          ys (if (= slope -1)
-               (drop-last (reverse ys))
-               (rest ys))]
-      (->> (interleave xs ys)
-           (partition-all 2)))))
 
 ;; Rook
 (defn valid-move-R [{:keys [board from to turn] :as move}]
@@ -296,6 +308,7 @@
     "n" valid-move-N
     "p" valid-move-P))
 
+;; Castle
 (defn valid-move-castling [{:keys [board turn castling gameid] :as move}]
   (let [rx1      (if (= castling :kingside) 7 0)
         ry1      (if (= turn :white) 7 0)
@@ -323,7 +336,6 @@
             (assoc :to-r new-rook)))))
 
 ;;; Check
-
 (defn check-detection
   "Goes through attackers (turn) pieces, and sees if any can reach the position
   that the defender's king is on (to)"
@@ -391,6 +403,15 @@
            ps
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
+
+;; TODO further validation of castling needed?
+(defn validate-move [m]
+  (if-not (:castling m)
+    (and m
+         (valid-to m)
+         (valid-from m)
+         (not (move-creates-check? m)))
+    true))
 
 ;;;; Input Handling
 ;; Algebraic notation:
@@ -561,6 +582,35 @@
                     :let [m (str (inc i) ". " (str/join " " (nth moves i)))]]
                 m))))
 
+
+(defn notate-pgn [gameid]
+  (let [{:chessgames/keys [startdate
+                           whiteID
+                           blackID
+                           winner
+                           gamemoves]} (first (db/get-gameinfo gameid))
+        location                       "Online, Gemini"
+        [date _]                       (str/split startdate #" ")
+        [white black]                  (map db/get-username-by-id [whiteID blackID])
+        result                         (cond
+                                         (= winner "white") "1-0"
+                                         (= winner "black") "0-1"
+                                         :else              "1/2-1/2")
+        moves                          (str (str/replace (format-notation-history gamemoves) #"\n" " ") " " result)
+        quote (char 34)
+        par-o (char 91)
+        par-c (char 93)
+        info-fn (fn [label info] (str par-o label " " quote info quote par-c))]
+
+    (str/join "\n"
+              [(info-fn "Site" location)
+               (info-fn "Date" date)
+               (info-fn "White" white)
+               (info-fn "Black" black)
+               (info-fn "Result" result)
+               "\n"
+               moves])))
+
 (defn piece-captured?
   "Count number of pieces between board states to see if something was captured.
   Used for move notation purposes"
@@ -613,44 +663,8 @@
         move             (assoc move :notation notation)]
     (db/update-chess-game move)))
 
-
-;; TODO further validation of castling needed?
-(defn validate-move [m]
-  (if-not (:castling m)
-    (and m
-         (valid-to m)
-         (valid-from m)
-         (not (move-creates-check? m)))
-    true))
-
-(defn notate-pgn [gameid]
-  (let [{:chessgames/keys [startdate
-                           whiteID
-                           blackID
-                           winner
-                           gamemoves]} (first (db/get-gameinfo gameid))
-        location                       "Online, Gemini"
-        [date _]                       (str/split startdate #" ")
-        [white black]                  (map db/get-username-by-id [whiteID blackID])
-        result                         (cond
-                                         (= winner "white") "1-0"
-                                         (= winner "black") "0-1"
-                                         :else              "1/2-1/2")
-        moves                          (str (str/replace (format-notation-history gamemoves) #"\n" " ") " " result)
-        quote (char 34)
-        par-o (char 91)
-        par-c (char 93)
-        info-fn (fn [label info] (str par-o label " " quote info quote par-c))]
-
-    (str/join "\n"
-              [(info-fn "Site" location)
-               (info-fn "Date" date)
-               (info-fn "White" white)
-               (info-fn "Black" black)
-               (info-fn "Result" result)
-               "\n"
-               moves])))
-
+;;;; Testing
+;; TODO delete these after testing
 (def sample-game ["e4" "e5"
                   "Nf3" "d6"
                   "d4" "Bg4"
@@ -882,6 +896,7 @@
 
 ;;; Main Page
 
+;; TODO completed games?
 (defn main-page [req]
   (->>
    (str "# Chess"
@@ -891,7 +906,6 @@
         "=> " root "/active-games Active Games\n"
         "=> " root "/start-game Start a new Game\n")
    (r/success-response r/gemtext)))
-
 
 ;;;; Main/routes
 
