@@ -6,7 +6,6 @@
 (def root "/src/app/chess")
 (def break "\n\n")
 
-
 ;;;; Pieces
 (def blank-marker (str (char 183)))
 
@@ -123,7 +122,7 @@
    (partition-all 2)))
 
 (defn update-square
-  "Update square on board. If no coordinates are provided, a blank square is added."
+  "Update square on board. If no piece (e.g., 'p') is provided, a blank square is added insteada."
   [board [x y] & piece]
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
@@ -567,7 +566,7 @@
             promotion              (str to (type-keyword-lookup promotion :black)
                                         check-notation)
             (and (= piece :pawn)
-                 (not capture))    to
+                 (not capture))    (str to check-notation)
             (= piece :pawn)        (str from "x" to check-notation)
             :else
             (let [piece (type-keyword-lookup piece :black)]
@@ -624,26 +623,34 @@
     (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
 
 
+#_(defn disambiguation-needed?
+    "Checks if more than one piece can move to 'to'. Used for notation purposes."
+    [{:keys [board turn piece] :as move}]
+    (let [valid-m-fn     (fn [piece] (case piece
+                                       :king   valid-move-K
+                                       :queen  valid-move-Q
+                                       :bishop valid-move-B
+                                       :rook   valid-move-R
+                                       :knight valid-move-N
+                                       :pawn   valid-move-P))
+          lookup-type    (partial board-lookup-type board)
+          lookup         (partial board-lookup board)
+          possible-froms (->> (map lookup-type (player-pieces turn))
+                              (reduce concat))
+          valid-froms    (->>
+                          (for [p    possible-froms
+                                :let [piece (-> (lookup p) lookup-piece)]]
+                            ((valid-m-fn piece) (assoc move :from p)))
+                          (filter true?))]
+      (not= 1 (count valid-froms))))
+
 (defn disambiguation-needed?
-  "Checks if more than one piece can move to 'to'. Used for notation purposes."
-  [{:keys [board turn] :as move}]
-  (let [valid-m-fn     (fn [piece] (case piece
-                                     :king   valid-move-K
-                                     :queen  valid-move-Q
-                                     :bishop valid-move-B
-                                     :rook   valid-move-R
-                                     :knight valid-move-N
-                                     :pawn   valid-move-P))
-        lookup-type    (partial board-lookup-type board)
-        lookup         (partial board-lookup board)
-        possible-froms (->> (map lookup-type (player-pieces turn))
-                            (reduce concat))
-        valid-froms    (->>
-                        (for [p    possible-froms
-                              :let [piece (-> (lookup p) lookup-piece)]]
-                          ((valid-m-fn piece) (assoc move :from p)))
-                        (filter true?))]
-    (not= 1 (count valid-froms))))
+  "Re-runs functions that were used for parsing input and checks for disambiguation flag.
+  Not the most efficient way to do this..."
+  [{:keys [piece] :as move}]
+  (if (= :pawn piece)
+    (:disambiguation-needed? (construct-move-from-pawn move))
+    (:disambiguation-needed? (construct-move-from move))))
 
 
 ;;;; Update game state
@@ -758,28 +765,30 @@
 
 ;; TODO message when section is empty, and option to start game from here.
 (defn active-games [req]
-  (let [{:keys [player-games open-games running-games]} (db/get-active-games req)]
+  (let [{:keys [player-games open-games running-games]} (db/get-active-games req)
+        game-list (fn [games]
+                    (if-not (seq games)
+                      (str "Nothing here yet.")
+                      (str/join break
+                                (for [g games]
+                                  (game-summary g)))))]
     (->>
      (str
       "# Active Games"
       break
       "## My Games"
       break
-      (str/join break
-                (for [g player-games]
-                  (game-summary g)))
+      (str "=> " root "/start-game Start a new game")
+      break
+      (game-list player-games)
       break
       "## Open Games"
       break
-      (str/join break
-                (for [g open-games]
-                  (game-summary g)))
+      (game-list open-games)
       break
       "## Running Games"
       break
-      (str/join break
-                (for [g running-games]
-                  (game-summary g)))
+      (game-list running-games)
       break)
      (r/success-response r/gemtext))))
 
@@ -810,7 +819,7 @@
             "=> start-game/white White\n"
             "=> start-game/black Black"
             break
-            (str "=> " root " Go back"))
+            (str "=> " root " Chess"))
        (r/success-response r/gemtext))
       (init-game req colour))))
 

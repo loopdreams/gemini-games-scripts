@@ -8,9 +8,12 @@
 ## Games
 
 => src/app/wordle Wordle
-=> src/app/tic_tac_toe Tic Tac Toe
 => src/app/chess Chess
 
 ## Other Services
 
 => src/app/flights Flights
+
+## Info
+
+=> src/app/about About
