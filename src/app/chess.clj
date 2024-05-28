@@ -703,6 +703,34 @@
          (not (move-creates-check? m)))
     true))
 
+(defn notate-pgn [gameid]
+  (let [{:chessgames/keys [startdate
+                           whiteID
+                           blackID
+                           winner
+                           gamemoves]} (first (db/get-gameinfo gameid))
+        location                       "Online, Gemini"
+        [date _]                       (str/split startdate #" ")
+        [white black]                  (map db/get-username-by-id [whiteID blackID])
+        result                         (cond
+                                         (= winner "white") "1-0"
+                                         (= winner "black") "0-1"
+                                         :else              "1/2-1/2")
+        moves                          (str (str/replace (format-notation-history gamemoves) #"\n" " ") " " result)
+        quote (char 34)
+        par-o (char 91)
+        par-c (char 93)
+        info-fn (fn [label info] (str par-o label " " quote info quote par-c))]
+
+    (str/join "\n"
+              [(info-fn "Site" location)
+               (info-fn "Date" date)
+               (info-fn "White" white)
+               (info-fn "Black" black)
+               (info-fn "Result" result)
+               "\n"
+               moves])))
+
 
 
 (comment
@@ -951,6 +979,8 @@
       break
       "Started by " (user startedby) " on " startdate
       break
+      (when (= complete 1) (str "=> " root "/playback/" gameid " Playback Game"))
+      break
       "```\n"
       (-> boardstate get-board-state draw-board)
       "\n```"
@@ -972,8 +1002,6 @@
       break
       (when gamemoves (format-notation-history gamemoves))
       break
-      "=> " root "/playback/" gameid " Playback"
-      break
       "=> " root " Back")
 
      (r/success-response r/gemtext))))
@@ -994,29 +1022,21 @@
         move (if (< move 1) 1 move)
         current-move (nth (str/split gamemoves #",") (dec move))]
     (->>
-     (str
-      "# Game " gameid
-      break
-      (str (user (if (= winner "white") whiteID blackID)) " won this game as " winner ".")
-      break
-      (str "Move: " move " " current-move)
-      break
+     [(str "# Game " gameid " Playback")
+      (str "Move " move ": " (if (even? move) "Black" "White") " played " current-move)
       (str "=> " root "/playback/" gameid "/" (dec move)" Previous Move")
-      break
       (str "=> " root "/playback/" gameid "/" (inc move)" Next Move")
-      break
       (str "=> " root "/playback/" gameid "/1 First Move")
-      break
-      "```\n"
+      "```"
       (-> boardstate (get-board-state move) draw-board)
-      "\n```"
-      break
-      "Started by " (user startedby) " on " startdate
-      break
-      (when gamemoves (format-notation-history gamemoves))
-      break
-      "=> " root " Back")
-
+      "```"
+      "## PGN Data for Game"
+      "You can copy/paste the below notation for the game into another chess viewer, for example:"
+      "=> https://lichess.org/paste Lichess - Game Viewer"
+      (notate-pgn gameid)
+      (str "=> " root " Back to Chess")
+      "=> / Home"]
+     (str/join break)
      (r/success-response r/gemtext))))
 
 
