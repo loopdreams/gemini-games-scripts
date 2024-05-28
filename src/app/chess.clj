@@ -7,32 +7,7 @@
 (def break "\n\n")
 
 ;; Pieces
-
 (def blank-marker (str (char 183)))
-
-;; (def white-K (str (char 9812)))
-;; (def white-Q (str (char 9813)))
-;; (def white-R (str (char 9814)))
-;; (def white-B (str (char 9815)))
-;; (def white-Kn (str (char 9816)))
-;; (def white-P (str (char 9817)))
-
-;; (def black-K (str (char 9818)))
-;; (def black-Q (str (char 9819)))
-;; (def black-R (str (char 9820)))
-;; (def black-B (str (char 9821)))
-;; (def black-Kn (str (char 9822)))
-;; (def black-P (str (char 9823)))
-
-;; (def default-board
-;;   [[black-R black-Kn black-B black-Q black-K black-B black-Kn black-R]
-;;    (into [] (repeat 8 black-P))
-;;    (into [] (repeat 8 blank-marker))
-;;    (into [] (repeat 8 blank-marker))
-;;    (into [] (repeat 8 blank-marker))
-;;    (into [] (repeat 8 blank-marker))
-;;    (into [] (repeat 8 white-P))
-;;    [white-R white-Kn white-B white-Q white-K white-B white-Kn white-R]])
 
 (def white-K "k")
 (def white-Q "q")
@@ -84,7 +59,6 @@
     "n" :knight
     "p" :pawn))
 
-
 ;; Make board
 
 (defn draw-board [board]
@@ -117,10 +91,15 @@
 ;; :piece piece-name e.g., :king
 ;; :piece-str piece-string e.g., "k"}
 
-(defn board-lookup [board [x y]]
+(defn board-lookup
+  "Return the string (piece) at coordinates x and y."
+  [board [x y]]
   (nth (nth board y) x))
 
-(defn board-lookup-type [board type]
+(defn board-lookup-type
+  "Look up all the coordinates of pieces 'type'.
+  Type is a string representation of the piece, e.g., 'p' for white pawns."
+  [board type]
   (->>
    (for [i (range 8)
          :let [row (map-indexed vector (nth board i))
@@ -130,7 +109,9 @@
    flatten
    (partition-all 2)))
 
-(defn update-square [board [x y] & piece]
+(defn update-square
+  "Update square on board. If no coordinates are provided, a blank square is added."
+  [board [x y] & piece]
   (->> (assoc (nth board y) x (if piece (first piece) blank-marker))
        (assoc board y)))
 
@@ -152,9 +133,7 @@
         (-> (update-square board from)
             (update-square to piece-str)))))
 
-
 ;; Board DB Interaction
-
 
 (defn get-board-history! [gameid]
   (db/get-board-history gameid))
@@ -191,8 +170,6 @@
    (let [hist (unpack-history history)]
      (when (< n (count hist))
        (nth hist n)))))
-
-
 
 ;; Helpers
 (defn player-pieces [turn]
@@ -275,7 +252,6 @@
       (->> (interleave xs ys)
            (partition-all 2)))))
 
-
 ;; Rook
 (defn valid-move-R [{:keys [board from to turn] :as move}]
   (let [[x1 y1] from
@@ -286,13 +262,6 @@
         (or (every? #(= blank-marker %) (map lookup between-squares))
             (empty? between-squares))))))
 
-(defn print-move [fn-name {:keys [board from to turn]}]
-  (println fn-name)
-  (println (str "From: " (apply str from)))
-  (println (str "To: " (apply str to)))
-  (println (str "Turn: " turn))
-  (println (draw-board board)))
-
 ;; Bishop
 (defn valid-move-B [{:keys [board from to]}]
   (let [between-points (between-squares-d from to)
@@ -301,19 +270,6 @@
     (and between-points
          (or (empty? between-points)
              (every? #(= blank-marker %) (map lookup between-points))))))
-
-;; Queen
-#_(defn valid-move-Q [{:keys [board from to turn] :as move}]
-    (let [[x1 y1] from
-          [x2 y2] to
-          lookup (partial board-lookup board)
-          between-squares (if (or (= x1 x2)
-                                  (= y1 y2))
-                            (between-squares-h from to)
-                            (between-squares-d from to))]
-      (and between-squares
-           (or (empty? between-squares)
-               (every? #(= blank-marker %) (map lookup between-squares))))))
 
 (defn valid-move-Q [move]
   (or (valid-move-R move)
@@ -362,26 +318,6 @@
             (assoc :from-r rook)
             (assoc :to-r new-rook)))))
 
-
-(comment
-  (valid-move-castling
-   (parse-input {:board (-> blank-board
-                            (update-square [4 7] "k")
-                            (update-square [7 7] "r"))
-                 :turn :white}
-                "0-0")))
-           
-
-(comment
-  (valid-move-R {:board (-> (update-square blank-board [0 0] "R")
-                            (update-square [0 1] "p"))
-                 :from [0 0] :to [0 1] :turn :black})
-  (valid-move-N {:board default-board :from [2 0] :to [3 2] :turn :black})
-  (valid-move-R {:board default-board :from [2 2] :to [6 3] :turn :black})
-  (valid-move-P {:board default-board :from [2 1] :to [1 2] :turn :black}))
-  
-
-
 ;; Check
 
 (defn check-detection
@@ -403,8 +339,9 @@
                      p))))
         check))))
 
-
-(defn move-creates-check? [{:keys [board turn from] :as move}]
+(defn move-creates-check?
+  "Used for move validation. If making a move exposes King to opponent, then it is an invalid move."
+  [{:keys [board turn from] :as move}]
   (let [n-turn (invert-turn turn)
         piece-str (board-lookup board from)]
     (-> move
@@ -413,7 +350,6 @@
         (check-detection n-turn))))
 
 ;; Checkmate
-
 (defn move-out-of-check?
   "Updates board with defender (turn) possible move, then checks based on attacker positions
   if check still holds."
@@ -451,30 +387,6 @@
            ps
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
-
-(comment
-  (checkmate-detection
-
-   (-> blank-board
-       (update-square [0 3] "K")
-       (update-square [2 3] "q")
-       (update-square [7 6] "k")
-       (update-square [2 1] "n")
-       (update-square [4 0] "b")
-       (update-square [2 7] "Q"))
-   :white)
-  (check-detection (-> blank-board
-                       (update-square [0 3] "K")
-                       (update-square [1 2] "q")) :white))
-
-
-(comment
-  (draw-board
-   (update-board {:board default-board
-                  :from [6 7]
-                  :to [5 5]
-                  :piece "n"
-                  :capture false})))
 
 ;; Input Handling
 ;; Algebraic notation:
@@ -645,7 +557,8 @@
                 m))))
 
 (defn piece-captured?
-  "Count number of pieces between board states to see if something was captured."
+  "Count number of pieces between board states to see if something was captured.
+  Used for move notation purposes"
   [prev-board nxt-board turn]
   (let [piece-count (fn [bd pieces]
                       (reduce (fn [acc piece]
@@ -656,7 +569,9 @@
     (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
 
 
-(defn disambiguation-needed? [{:keys [to board turn] :as move}]
+(defn disambiguation-needed?
+  "Checks if more than one piece can move to 'to'. Used for notation purposes."
+  [{:keys [board turn] :as move}]
   (let [valid-m-fn     (fn [piece] (case piece
                                      :king   valid-move-K
                                      :queen  valid-move-Q
@@ -691,7 +606,6 @@
         notation         (notate-move move)
         move             (assoc move :notation notation)]
     (db/update-chess-game move)))
-
 
 
 ;; TODO further validation of castling needed?
@@ -730,31 +644,6 @@
                (info-fn "Result" result)
                "\n"
                moves])))
-
-
-
-(comment
-  (let [b (->
-           (parse-input
-            {:board default-board
-             :turn :white
-             :input "e4"}))
-        new-b (update-board b)]
-    (parse-input {:board new-b :turn :black :input "e5"})))
-
-
-
-(comment
-  ;; Testing promotion
-  (->
-   (parse-input
-    {:board
-     (-> blank-board
-         (update-square [0 1] "p"))
-     :turn :white}
-    "a8Q")
-   (update-board)))
-
 
 (def sample-game ["e4" "e5"
                   "Nf3" "d6"
@@ -816,55 +705,6 @@
         (reset! b update)
         (swap! c inc)))))
 
-
-(def test-board
-  (last
-   (let [b (atom default-board)
-         t (atom :white)
-         c (atom 1)]
-     (for [move sample-game-2
-           :let [m (-> {:board @b :turn @t :input move} parse-input)
-                 update (update-board m)
-                 n-turn (if (= @t :white) :black :white)]]
-       (do
-         (reset! t n-turn)
-         (swap! c inc)
-         (reset! b update))))))
-
-(comment
-  (->
-   (parse-input {:board test-board :turn :white :input "Bd8"})
-   (update-board)
-   (checkmate-detection :white)))
-
-(comment
-  (checkmate-detection test-board :white))
-
-(comment
-  (draw-board (clojure.edn/read-string "[[R N B b · B · R] [P P K · · P P P] [· · P · · · · ·] [· · · · Q · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
-  (draw-board (clojure.edn/read-string "[[R N B · · B · R] [P P b · · P P P] [· · P · · · · ·] [· · · Q · · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
-  (draw-board (clojure.edn/read-string "[[R N B b · B · R] [P P K · · P P P] [· · P · · · · ·] [· · · · Q · · ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]"))
-  (draw-board (clojure.edn/read-string "[[R N B · · B · R] [P P b · · P P P] [· · P · · · · ·] [· · · · · · Q ·] [· · · · N · · ·] [· · · · · · · ·] [p p p · · p p p] [· · k r · b n r]]")))
-
-(comment
-  (checkmate-detection
-   (-> blank-board
-       (update-square [3 0] "b")
-       (update-square [3 7] "r")
-       (update-square [2 7] "k")
-
-       (update-square [2 1] "K")
-       (update-square [2 0] "B")
-       (update-square [1 0] "N")
-       (update-square [1 1] "P")
-       (update-square [2 2] "P")
-
-       (update-square [4 3] "Q"))
-   :white))
-
-(comment
-  (draw-board (clojure.edn/read-string "[[· N B · · · · ·] [· P b · · · · ·] [· · P · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · · · · · · ·] [· · Q r · · · ·]]")))
-
 ;; Turn logic
 
 (defn play-turn [req gameid]
@@ -885,8 +725,6 @@
           (do
             (update-game-record! (assoc move :player-input (:query req)))
             {:status 30 :meta (str root "/game/" gameid)}))))))
-
-
 
 ;; Active Games page
 
@@ -1007,19 +845,15 @@
      (r/success-response r/gemtext))))
 
 (defn game-playback-page [_ gameid move]
-  (let [{:chessgames/keys [whiteID
-                           blackID
-                           startdate
-                           startedby
-                           turncount
-                           boardstate
-                           winner
-                           gamemoves]} (first (db/get-gameinfo gameid))
+  (let [{:chessgames/keys
+         [turncount
+          boardstate
+          gamemoves]} (first (db/get-gameinfo gameid))
 
-        user (fn [id] (db/get-username-by-id id))
-        move (if move (parse-long move) (dec turncount))
-        move (if (> move (dec turncount)) (dec turncount) move)
-        move (if (< move 1) 1 move)
+        user         (fn [id] (db/get-username-by-id id))
+        move         (if move (parse-long move) (dec turncount))
+        move         (if (> move (dec turncount)) (dec turncount) move)
+        move         (if (< move 1) 1 move)
         current-move (nth (str/split gamemoves #",") (dec move))]
     (->>
      [(str "# Game " gameid " Playback")
@@ -1038,9 +872,6 @@
       "=> / Home"]
      (str/join break)
      (r/success-response r/gemtext))))
-
-
-
 
 ;; Main Page
 
