@@ -187,8 +187,10 @@
 
 (defn get-board-state
   ([history] (last (unpack-history history)))
-  ([history n] (when (< n (count history))
-                 (nth history n))))
+  ([history n]
+   (let [hist (unpack-history history)]
+     (when (< n (count hist))
+       (nth hist n)))))
 
 
 
@@ -970,9 +972,55 @@
       break
       (when gamemoves (format-notation-history gamemoves))
       break
+      "=> " root "/playback/" gameid " Playback"
+      break
       "=> " root " Back")
 
      (r/success-response r/gemtext))))
+
+(defn game-playback-page [_ gameid move]
+  (let [{:chessgames/keys [whiteID
+                           blackID
+                           startdate
+                           startedby
+                           turncount
+                           boardstate
+                           winner
+                           gamemoves]} (first (db/get-gameinfo gameid))
+
+        user (fn [id] (db/get-username-by-id id))
+        move (if move (parse-long move) (dec turncount))
+        move (if (> move (dec turncount)) (dec turncount) move)
+        move (if (< move 1) 1 move)
+        current-move (nth (str/split gamemoves #",") (dec move))]
+    (->>
+     (str
+      "# Game " gameid
+      break
+      (str (user (if (= winner "white") whiteID blackID)) " won this game as " winner ".")
+      break
+      (str "Move: " move " " current-move)
+      break
+      (str "=> " root "/playback/" gameid "/" (dec move)" Previous Move")
+      break
+      (str "=> " root "/playback/" gameid "/" (inc move)" Next Move")
+      break
+      (str "=> " root "/playback/" gameid "/1 First Move")
+      break
+      "```\n"
+      (-> boardstate (get-board-state move) draw-board)
+      "\n```"
+      break
+      "Started by " (user startedby) " on " startdate
+      break
+      (when gamemoves (format-notation-history gamemoves))
+      break
+      "=> " root " Back")
+
+     (r/success-response r/gemtext))))
+
+
+
 
 ;; Main Page
 
@@ -989,20 +1037,19 @@
 
 ;; Main/routes
 
-
-
-
 (defn main [req]
   (if-not (:client-cert req)
     (reg/register-user)
 
-    (let [route (or (first (:path-args req)) "/")]
+    (let [[r gameid game-r] (:path-args req)
+          route             (or r "/")]
       (case route
         "/"            (main-page req)
         "name"         (reg/register-name req root)
         "active-games" (active-games req)
         "start-game"   (start-game-page req)
-        "join-game"    (join-game req (second (:path-args req)) (last (:path-args req)))
-        "play-turn"    (play-turn req (second (:path-args req)))
-        "game"         (game-page req (second (:path-args req)))
+        "join-game"    (join-game req gameid game-r)
+        "play-turn"    (play-turn req gameid)
+        "game"         (game-page req gameid)
+        "playback"     (game-playback-page req gameid game-r)
         (r/success-response r/gemtext "Nothing here")))))
