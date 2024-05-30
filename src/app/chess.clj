@@ -791,7 +791,6 @@
      "Started by " (or startedby "somebody") " on " (:chessgames/startdate game-info) "\n"
      "=> " root "/game/" (:chessgames/gameid game-info) " View Game")))
 
-;; TODO message when section is empty, and option to start game from here.
 (defn active-games [req]
   (let [{:keys [player-games open-games running-games]} (db/get-active-games req)
         game-list (fn [games]
@@ -801,25 +800,16 @@
                                 (for [g games]
                                   (game-summary g)))))]
     (->>
-     (str
-      "# Active Games"
-      break
+     ["# Active Games"
       (str "=> " root " Back")
-      break
       "## My Games"
-      break
       (game-list player-games)
-      break
       (str "=> " root "/start-game Start a new game")
-      break
       "## Open Games"
-      break
       (game-list open-games)
-      break
       "## Running Games"
-      break
-      (game-list running-games)
-      break)
+      (game-list running-games)]
+     (str/join break)
      (r/success-response r/gemtext))))
 
 
@@ -957,14 +947,19 @@
 
 ;; TODO completed games?
 (defn main-page [req]
-  (->>
-   (str "# Chess"
-        break
-        "=> / Home"
-        break
-        "=> " root "/active-games Active Games\n"
-        "=> " root "/start-game Start a new Game\n")
-   (r/success-response r/gemtext)))
+  (let [user (db/get-username req)]
+    (->>
+     (str "# Chess"
+          break
+          "=> / Home"
+          break
+          (if-not user
+            (str "=> " root "/name/ Enter your name")
+            (str "=> " root "/active-games Active Games\n"
+                 "=> " root "/start-game Start a new Game"
+                 break
+                 "Signed in as " user)))
+     (r/success-response r/gemtext))))
 
 ;;;; Main/routes
 

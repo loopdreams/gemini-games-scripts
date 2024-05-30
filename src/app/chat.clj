@@ -69,7 +69,7 @@
       "\n\n"
       (if-not user
         (path-link "name" "Enter your name")
-        (str "Hello " user "!\n\n"
+        (str "Signed is as " user "\n\n"
              (path-link "message" "Write a message")))
       "\n\n"
       "---------------------------------------------\n"

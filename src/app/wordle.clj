@@ -150,7 +150,7 @@
 
 
 ;; Page
-(defn wordle-page [req]
+(defn chat-page [req]
   (let [user           (db/get-username req)
         board          (-> (db/get-guesses req)
                            make-board
@@ -206,7 +206,7 @@
 
     (let [route (or (first (:path-args req)) "/")]
       (case route
-        "/"       (wordle-page req)
+        "/"       (chat-page req)
         "name"    (reg/register-name req root)
         "guess"   (make-guess req)
         (r/success-response r/gemtext "Nothing here")))))
