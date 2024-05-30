@@ -58,7 +58,7 @@
          (= 5))))
 
 (defn validate-word [guess]
-  (db/valid-words (str/lower-case guess)))
+  (@db/valid-words (str/lower-case guess)))
 
 (defn winner? [guesses]
   (when (seq guesses)
