@@ -902,7 +902,7 @@
         :else
         (if-not (or (= (db/client-id req) whiteID)
                     (= (db/client-id req) blackID))
-          (when (= complete 0) (str "Game ongoing, being played by " (user whiteID) " (white) and " (user blackID) " (black)."))
+          (when (= complete 0) (str (user whiteID) "(white) and " (user blackID) " (black) are playing this game. Game ongoing."))
           (cond
             (and (= drawstatus 1)
                  (= user-colour playerturn)) "You have offered a draw, waiting for opponent to accept."
@@ -911,8 +911,8 @@
                                               (str "=> " root "/draw-reject/" gameid " Reject draw"))
             (= drawstatus 2)             (str "Game tied!")
             (= resignstatus 1)           (str (user (if (= winner "white") blackID whiteID)) " resigned. "
-                                              (user (if (= winner "white") whiteID blackID)) "  (" winner ") has won!")
-            (= complete 1)               (str (user (if (= winner "white") whiteID blackID)) " (" winner ")" " has won!")
+                                              (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
+            (= complete 1)               (str (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
             (= playerturn user-colour)
             (str
              (when last-move (str (str/capitalize opponent-colour) " played " last-move "\n"))

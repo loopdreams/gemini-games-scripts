@@ -8,16 +8,6 @@
 (def messages-per-page 10)
 (def root "/src/app/chat")
 
-(def banner
-  "```
-  ~~~~~~~~~~~
-  ~+-+-+-+-+~
-  ~|C|h|a|t|~
-  ~+-+-+-+-+~
-  ~~~~~~~~~~~\n```")
- 
-
-
 (defn write-message [req]
   (if (:query req)
     (let [message {:username (db/get-username req)
@@ -26,7 +16,6 @@
       (db/chat-insert-message! message)
       {:status 30 :meta root})
     {:status 10 :meta "Enter message"}))
-
 
 (defn chat-history [page-no]
   (let [messages       (->> (db/chat-get-messages)
@@ -60,7 +49,7 @@
 (defn path-link [name label]
   (str "=> " root "/" name " " label))
 
-(defn chat-page [req page-no]
+(defn chat-main-page [req page-no]
   (let [user (db/get-username req)]
     (->>
      (str
@@ -80,8 +69,8 @@
   (if-not (:client-cert req) (reg/register-user)
           (let [route (or (first (:path-args req)) "/")]
             (case route
-              "/"       (chat-page req 1)
-              "page"    (chat-page req (parse-long (second (:path-args req))))
+              "/"       (chat-main-page req 1)
+              "page"    (chat-main-page req (parse-long (second (:path-args req))))
               "name"    (reg/register-name req root)
               "message" (write-message req)
               (r/success-response r/gemtext "Nothing here")))))

@@ -150,7 +150,7 @@
 
 
 ;; Page
-(defn chat-page [req]
+(defn wordle-game-page [req]
   (let [user           (db/get-username req)
         board          (-> (db/get-guesses req)
                            make-board
@@ -166,25 +166,21 @@
       break
       "=> / Home"
       break
-      "This is a gemini clone of the well-known game Wordle."
+      "A gemini clone of Wordle. Try to guess the five letter word."
       break
-
       (if-not user
         (path-link "name" "Enter your name")
 
-        (str "Hi " user
-             break
+        (cond
+          (= win-condition 1)
+          (str "You won " user "!\nIt took you " guess-count " guesses."
+               break
+               (reg/wordle-stats req))
 
-             (cond
-               (= win-condition 1)
-               (str "You won " user "!\nIt took you " guess-count " guesses."
-                    break
-                    (reg/wordle-stats req))
+          (= guess-limit guess-count)
+          (str "Out of guesses! The word was: " daily-word)
 
-               (= guess-limit guess-count)
-               (str "Out of guesses! The word was: " daily-word)
-
-               :else (path-link "guess" "Make a guess"))))
+          :else (path-link "guess" "Make a guess")))
 
       break
       "```\n"
@@ -206,7 +202,7 @@
 
     (let [route (or (first (:path-args req)) "/")]
       (case route
-        "/"       (chat-page req)
+        "/"       (wordle-game-page req)
         "name"    (reg/register-name req root)
         "guess"   (make-guess req)
         (r/success-response r/gemtext "Nothing here")))))

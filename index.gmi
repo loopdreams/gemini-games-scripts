@@ -21,13 +21,13 @@ Note June 2024: This is a new area and can be considered a work in progress. I c
 ### Client Certificates
 You will need a client certificate to interact with the games here. Client certificates are like an 'ID' for recognising a user.
 
-They can be simple enough to generate manually, for example by using solderpunk's 'gemcert' [1], but clients like Lagrange also make this process very easy/intuitive:
+They can be simple enough to generate manually, for example by using solderpunk's 'gemcert', but clients like Lagrange also make this process very easy/intuitive.
 
 => https://git.sr.ht/~solderpunk/gemcert Gemcert on sourcehut
 => https://gmi.skyjake.fi/lagrange/ Lagrange
 
-### Server
-=> src/app/about Server Info
+### Source
+=> src/app/about Server Info & source code
 
 ### Issues
 If you encounter any issues you can contact me at the address listed here:
