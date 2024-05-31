@@ -1,9 +1,11 @@
 # Gemini Games
 
+Note June 2024: This is a new area and can be considered a work in progress. I can't guarentee things work 100%! Report any issues to the email address listed in the Info section below.
+
+## General
 
 => src/app/user User Page (Register Name & View History)
-
-=> src/app/chat Chat
+=> src/app/chat Message Board
 
 ## Games
 
@@ -16,4 +18,34 @@
 
 ## Info
 
-=> src/app/about About
+### Client Certificates
+You will need a client certificate to interact with the games here. Client certificates are like an 'ID' for recognising a user.
+
+They can be simple enough to generate manually, for example by using solderpunk's 'gemcert' [1], but clients like Lagrange also make this process very easy/intuitive:
+
+=> https://git.sr.ht/~solderpunk/gemcert Gemcert on sourcehut
+=> https://gmi.skyjake.fi/lagrange/ Lagrange
+
+### Server
+=> src/app/about Server Info
+
+### Issues
+If you encounter any issues you can contact me at the address listed here:
+=> gemini://spool-five.com/about.gmi About me
+
+## Other Games on Gemini
+
+I'm sure I'm missing a lot (do let me know!)
+
+=> gemini://tilde.cafe/~stack/cgisesh/DicePoker/poker Dice Poker
+=> gemini://tilde.cafe/~spellbinding/game/cgi? Spellbinding
+=> gemini://tilde.cafe/~spellbinding/wordo/cgi? Wordo
+=> gemini://gemini.smallweb.space/farkle/ Farkle
+=> gemini://gemi.dev/cgi-bin/witw.cgi/ Where in the world?
+=> gemini://gemini.thegonz.net/wsq/  Wordsquirreler
+=> gemini://gemini.thegonz.net/wt/ Wordtunneler
+=> gemini://gemini.thegonz.net/gemski/ Gemski
+=> gemini://gemini.thegonz.net/gk/ Gemkerkerkruip
+=> gemini://gemini.thegonz.net/zyg/ Zyg
+=> gemini://gemini.thegonz.net/gemgrave/ Gemgrave
+=> gemini://gemini.thegonz.net/eindeutigkeit/ Metapuzzle

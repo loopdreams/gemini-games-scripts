@@ -251,7 +251,7 @@
                                     [i (if (= turn :white) 6 1)]))
         direction       (if (= turn :white) - +)]
     (and
-     (and (not (:promotion move)) (not (= y2 (if (= turn :white) 0 7)))) ;; FIXME - check if this is actually needed here...
+     (and (not (:promotion move)) (not (= y2 (if (= turn :white) 0 7))))
      (= (if (= turn :white) white-P black-P)
         (lookup from))
      (cond
@@ -974,7 +974,9 @@
             (str "=> " root "/active-games Active Games\n"
                  "=> " root "/start-game Start a new Game"
                  break
-                 "Signed in as " user)))
+                 "Signed in as " user))
+          break
+          (slurp "static/partials/chess_info"))
      (r/success-response r/gemtext))))
 
 ;;;; Main/routes
