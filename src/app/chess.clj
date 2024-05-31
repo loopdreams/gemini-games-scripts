@@ -61,9 +61,11 @@
 
 ;;;; Make board
 
-(defn draw-board [board]
+(defn draw-board [board & rotate?]
   (let [col-ref ["a" "b" "c" "d" "e" "f" "g" "h"]
+        col-ref (if (seq rotate?) (reverse col-ref) col-ref)
         row-ref ["8" "7" "6" "5" "4" "3" "2" "1"]
+        row-ref (if (seq rotate?) (reverse row-ref) row-ref)
         h-rows (str "   " (str/join " " col-ref) " ")
         h-line "---------------------"]
     (str
@@ -81,6 +83,14 @@
      "\n"
      h-rows)))
 
+(defn rotate-board [board]
+  (let [rotate-90 (fn [b]
+                    (->> b
+                         (apply mapv vector)
+                         (mapv reverse)))]
+    (-> board
+        rotate-90
+        rotate-90)))
 
 ;;;; Game logic
 ;; Game data ('move') is handled via a clojure map, with the following available keys:
@@ -845,7 +855,7 @@
 
 ;;; Playing a game
 
-(defn game-page [req gameid]
+(defn game-page [req gameid board-orientation]
   (let [{:chessgames/keys [whiteID
                            blackID
                            playerturn
@@ -872,7 +882,12 @@
       (when (= complete 1) (str "=> " root "/playback/" gameid " Playback Game"))
       break
       "```\n"
-      (-> boardstate get-board-state draw-board)
+      (cond
+        (and (= user-colour "black") (not= board-orientation "default"))
+        (-> boardstate get-board-state rotate-board (draw-board :rotate))
+        (= board-orientation "rotate")
+        (-> boardstate get-board-state rotate-board (draw-board :rotate))
+        :else (-> boardstate get-board-state draw-board))
       "\n```"
       break
       (when (= checkstate 1) "Check!")
@@ -910,8 +925,10 @@
       break
       (when gamemoves (format-notation-history gamemoves))
       break
+      (str "=> " root "/game/" gameid "/"
+           (if (= board-orientation "default") "rotate" "default") " Rotate board")
+      break
       "=> " root " Back")
-
      (r/success-response r/gemtext))))
 
 (defn game-playback-page [_ gameid move]
@@ -920,7 +937,6 @@
           boardstate
           gamemoves]} (first (db/get-gameinfo gameid))
 
-        user         (fn [id] (db/get-username-by-id id))
         move         (if move (parse-long move) (dec turncount))
         move         (if (> move (dec turncount)) (dec turncount) move)
         move         (if (< move 1) 1 move)
@@ -980,6 +996,6 @@
         "draw-offer"   (offer-draw req gameid)
         "draw-accept"  (accept-draw req gameid)
         "draw-reject"  (reject-draw req gameid)
-        "game"         (game-page req gameid)
+        "game"         (game-page req gameid (or game-r "default"))
         "playback"     (game-playback-page req gameid game-r)
         (r/success-response r/gemtext "Nothing here")))))
