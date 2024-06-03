@@ -861,6 +861,7 @@
                            blackID
                            playerturn
                            startdate
+                           enddate
                            startedby
                            boardstate
                            checkstate
@@ -879,6 +880,8 @@
       "# Game " gameid
       break
       "Started by " (user startedby) " on " startdate
+      break
+      (when enddate (str "Finished on " enddate))
       break
       (when (= complete 1) (str "=> " root "/playback/" gameid " Playback Game"))
       break
