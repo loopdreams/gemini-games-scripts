@@ -6,11 +6,12 @@
 (require '[java-time.api :as jt])
 
 (def root "/src/app/wordle")
-(def guess-limit 6)
+(def instructions (slurp "static/partials/instructions_wordle"))
 (def break "\n\n")
-(defonce word-of-the-day (db/get-todays-word))
 
-(def default-letters "qwertyuiop asdfghjkl  zxcvbnm")
+(def guess-limit 6)
+(defonce word-of-the-day (db/get-todays-word))
+(def default-keyboard-letters "qwertyuiop asdfghjkl  zxcvbnm")
 
 ;; Keyboard logic
 (defn drop-letter [keyb drop]
@@ -18,7 +19,6 @@
     (let [pos (.indexOf keyb drop)]
       (str (subs keyb 0 pos) "_" (subs keyb (inc pos))))
     keyb))
-
 
 (defn drop-letters [keyb letters]
   (reduce #(drop-letter %1 %2)
@@ -30,10 +30,6 @@
        (map #(str/join " " %))
        (str/join "\n")))
 
-(def instructions
-  (slurp "static/partials/instructions_wordle"))
-
-;; Helper Functions
 
 (defn time-until-next-word []
   (let [[hrs mins :as x] (map parse-long
@@ -45,7 +41,7 @@
         (str "- " hrs-remaining ":" mins-remaining " until next word."))
       (str "- " (- 24 hrs) " until next word."))))
 
-
+;; Helper Functions
 (defn path-link [name label]
   (str "=> " root "/" name " " label))
 
@@ -98,12 +94,11 @@
         new-guesses      (str (when guesses-state (str guesses-state " "))
                               input ":" guess-markers)
 
-        current-keyboard (or (db/get-keyboard req) default-letters)
+        current-keyboard (or (db/get-keyboard req) default-keyboard-letters)
         new-keyboard     (->> (incorrect-letters word input)
                               (drop-letters current-keyboard))
 
         win-condition    (winner? new-guesses)]
-    ;; TODO find better place to init keyboard
     (db/insert-guess! req new-guesses)
     (db/update-keyboard! req new-keyboard)
     (when win-condition
@@ -155,7 +150,7 @@
         board          (-> (db/get-guesses req)
                            make-board
                            draw-board)
-        keyboard-state (-> (or (db/get-keyboard req) default-letters)
+        keyboard-state (-> (or (db/get-keyboard req) default-keyboard-letters)
                            keyboard)
         guess-count    (- (inc guess-limit) (or (db/get-score req) 0))
         win-condition  (db/win-condition req)
