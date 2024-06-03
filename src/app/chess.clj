@@ -658,9 +658,10 @@
   "Re-runs functions that were used for parsing input and checks for disambiguation flag.
   Not the most efficient way to do this..."
   [{:keys [piece] :as move}]
-  (if (= :pawn piece)
-    (:disambiguation-needed? (construct-move-from-pawn move))
-    (:disambiguation-needed? (construct-move-from move))))
+  (when (not (:castling move))
+    (if (= :pawn piece)
+      (:disambiguation-needed? (construct-move-from-pawn move))
+      (:disambiguation-needed? (construct-move-from move)))))
 
 
 ;;;; Update game state
