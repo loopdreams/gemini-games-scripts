@@ -6,6 +6,7 @@ Note June 2024: This is a new area and can be considered a work in progress. I c
 
 => src/app/user User Page (Register Name & View History)
 => src/app/chat Message Board
+=> src/app/leaderboards Leaderboards
 
 ## Games
 
@@ -37,7 +38,7 @@ If you encounter any issues you can contact me at the address listed here:
 
 I'm sure I'm missing a lot (do let me know!)
 
-=> gemini://tilde.cafe/~stack/cgisesh/DicePoker/poker Dice Poker
+=> gemini://tilde.cafe/~stack/DicePoker/live/poker? Dice Poker
 => gemini://tilde.cafe/~spellbinding/game/cgi? Spellbinding
 => gemini://tilde.cafe/~spellbinding/wordo/cgi? Wordo
 => gemini://gemini.smallweb.space/farkle/ Farkle
