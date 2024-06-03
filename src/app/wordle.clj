@@ -127,14 +127,14 @@
 
 ;; Game Board
 (defn format-row [r]
-  (str "| " (str/join " " (interleave r (repeat "|")))))
+  (str " " (str/join " " (interleave r (repeat " ")))))
 
 (defn unpack-row-data [row-data]
   (->> (str/split row-data #" ")
        (map #(str/split % #":"))))
 
 (defn make-board [row-data]
-  (if-not row-data ["|   |   |   |   |   |"]
+  (if-not row-data ["                     "]
           (let [rows (unpack-row-data row-data)]
             (for [r rows
                   :let [[guess markers] r]]
@@ -143,7 +143,7 @@
                    (format-row markers))))))
 
 (defn draw-board [board]
-  (let [frames "---------------------"]
+  (let [frames "-------------------"]
     (str/join "\n"
               [frames
                (str/join "\n" (interleave board (repeat frames)))])))
