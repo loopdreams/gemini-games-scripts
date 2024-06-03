@@ -927,7 +927,14 @@
       (when gamemoves (format-notation-history gamemoves))
       break
       (str "=> " root "/game/" gameid "/"
-           (if (= board-orientation "default") "rotate" "default") " Rotate board")
+           (cond
+             (and (= board-orientation "")
+                  (= user-colour "black"))  "default"
+             (and (= board-orientation "")
+                  (= user-colour "white"))  "rotate"
+             (= board-orientation "rotate") "default"
+             :else                          "rotate")
+           " Rotate board")
       break
       "=> " root " Back")
      (r/success-response r/gemtext))))
@@ -999,6 +1006,6 @@
         "draw-offer"   (offer-draw req gameid)
         "draw-accept"  (accept-draw req gameid)
         "draw-reject"  (reject-draw req gameid)
-        "game"         (game-page req gameid (or game-r "default"))
+        "game"         (game-page req gameid (or game-r ""))
         "playback"     (game-playback-page req gameid game-r)
         (r/success-response r/gemtext "Nothing here")))))
