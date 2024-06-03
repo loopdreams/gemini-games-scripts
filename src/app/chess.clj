@@ -681,68 +681,6 @@
         move             (assoc move :notation notation)]
     (db/update-chess-game req move)))
 
-;;;; Testing
-;; TODO delete these after testing
-(def sample-game ["e4" "e5"
-                  "Nf3" "d6"
-                  "d4" "Bg4"
-                  "d4xe5" "Bxf3"
-                  "Qxf3" "d6xe5"
-                  "Bc4" "Nf6"
-                  "Qb3" "Qe7"
-                  "Nc3" "c6"
-                  "Bg5" "b5"
-                  "Nxb5" "c6xb5"
-                  "Bxb5+" "Nb8d7"
-                  "0-0-0" "Rd8"
-                  "Rxd7" "Rxd7"
-                  "Rd1" "Qe6"
-                  "Bxd7+" "Nxd7"
-                  "Qb8+" "Nxb8"
-                  "Rd8#"])
-
-(def sample-game-2 ["e4" "c6"
-                    "d4" "d5"
-                    "Nc3" "xe4"
-                    "Nxe4" "Nf6"
-                    "Qd3" "e5"
-                    "xe5" "Qa5+"
-                    "Bd2" "Qxe5"
-                    "0-0-0" "Nxe4"
-                    "Qd8+" "Kxd8"
-                    "Bg5+" "Kc7"
-                    "Bd8"])
-
-(def sample-game-3 ["e4" "e5"
-                    "Nf3" "Nc6"
-                    "Bc4" "Bc5"
-                    "b4" "Bxb4"
-                    "c3" "Ba5"
-                    "d4" "Pxd4"
-                    "0-0"])
-
-
-(comment
-  (let [b (atom default-board)
-        t (atom :white)
-        c (atom 1)]
-    (for [move sample-game-3
-          :let [m (-> {:board @b :turn @t :input move} parse-input)
-                update (update-board m)
-                n-turn (if (= @t :white) :black :white)]]
-      (do
-        (println (str @c ". " (notate-move m)))
-        (println "\n")
-        (println (when (check-detection update @t) "Check!"))
-        (println "\n")
-        (println (checkmate-detection update @t))
-        (println (draw-board update))
-        (println "\n")
-        (println "------------------------------------------\n")
-        (reset! t n-turn)
-        (reset! b update)
-        (swap! c inc)))))
-
 ;;;; UI
 ;;; Turn Logic
 
