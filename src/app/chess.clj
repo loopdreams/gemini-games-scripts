@@ -632,28 +632,6 @@
         pieces (if (= turn :white) black-pieces white-pieces)]
     (not= (piece-count prev-board pieces) (piece-count nxt-board pieces))))
 
-
-#_(defn disambiguation-needed?
-    "Checks if more than one piece can move to 'to'. Used for notation purposes."
-    [{:keys [board turn piece] :as move}]
-    (let [valid-m-fn     (fn [piece] (case piece
-                                       :king   valid-move-K
-                                       :queen  valid-move-Q
-                                       :bishop valid-move-B
-                                       :rook   valid-move-R
-                                       :knight valid-move-N
-                                       :pawn   valid-move-P))
-          lookup-type    (partial board-lookup-type board)
-          lookup         (partial board-lookup board)
-          possible-froms (->> (map lookup-type (player-pieces turn))
-                              (reduce concat))
-          valid-froms    (->>
-                          (for [p    possible-froms
-                                :let [piece (-> (lookup p) lookup-piece)]]
-                            ((valid-m-fn piece) (assoc move :from p)))
-                          (filter true?))]
-      (not= 1 (count valid-froms))))
-
 (defn disambiguation-needed?
   "Re-runs functions that were used for parsing input and checks for disambiguation flag.
   Not the most efficient way to do this..."
