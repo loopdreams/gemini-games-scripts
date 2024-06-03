@@ -886,20 +886,25 @@
       (cond
         (and (= user-colour "black") (not= board-orientation "default"))
         (-> boardstate get-board-state rotate-board (draw-board :rotate))
+
         (= board-orientation "rotate")
         (-> boardstate get-board-state rotate-board (draw-board :rotate))
+
         :else (-> boardstate get-board-state draw-board))
       "\n```"
       break
-      (when (= checkstate 1) "Check!")
+      (cond
+        (= complete 1) "Checkmate!"
+        (= checkstate 1) "Check!"
+        :else "")
       break
       (cond
         (and (or (not whiteID)
                  (not blackID))
              (= startedby
                 (db/client-id req))) "Waiting for other player to join."
-        (not whiteID) (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
-        (not blackID) (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
+        (not whiteID)                (str "=> " root "/join-game/" gameid "/" "white" " Join this game as white")
+        (not blackID)                (str "=> " root "/join-game/" gameid "/" "black" " Join this game as black")
         :else
         (if-not (or (= (db/client-id req) whiteID)
                     (= (db/client-id req) blackID))
@@ -907,13 +912,13 @@
           (cond
             (and (= drawstatus 1)
                  (= user-colour playerturn)) "You have offered a draw, waiting for opponent to accept."
-            (= drawstatus 1)             (str "A draw has been offered, do you accept?\n"
-                                              (str "=> " root "/draw-accept/" gameid " Accept draw\n")
-                                              (str "=> " root "/draw-reject/" gameid " Reject draw"))
-            (= drawstatus 2)             (str "Game tied!")
-            (= resignstatus 1)           (str (user (if (= winner "white") blackID whiteID)) " resigned. "
-                                              (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
-            (= complete 1)               (str (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
+            (= drawstatus 1)                 (str "A draw has been offered, do you accept?\n"
+                                                  (str "=> " root "/draw-accept/" gameid " Accept draw\n")
+                                                  (str "=> " root "/draw-reject/" gameid " Reject draw"))
+            (= drawstatus 2)                 (str "Game tied!")
+            (= resignstatus 1)               (str (user (if (= winner "white") blackID whiteID)) " resigned. "
+                                                  (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
+            (= complete 1)                   (str (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
             (= playerturn user-colour)
             (str
              (when last-move (str (str/capitalize opponent-colour) " played " last-move "\n"))

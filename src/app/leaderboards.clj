@@ -37,18 +37,24 @@
 (defn wordle-leaderboard []
   (draw-leaderboard (lb/wordle-leaderboard-data)))
 
+(defn wordle-daily-leaderboard []
+  (draw-leaderboard (lb/wordle-daily-leaderboard-data)))
+
 (defn chess-leaderboard []
   (draw-leaderboard (lb/chess-leaderboard-data)))
 
 (defn main [_]
   (->>
    (str/join break
-    ["# Leaderboards"
-     "## Wordle"
-     "Score is based on number of guesses taken. For example, guessing on the first try = 6 points, on the second = 5, and so on."
-     (str "```\n" (wordle-leaderboard) "\n```")
-     "## Chess"
-     "2 points for a win, 1 point for a tie."
-     (str "```\n" (chess-leaderboard) "\n```")
-     "=> / Back"])
+             ["# Leaderboards"
+              "## Wordle"
+              "Score is based on number of guesses taken. For example, guessing on the first try = 6 points, on the second = 5, and so on."
+              "### Daily Scores"
+              (str "```\n" (wordle-daily-leaderboard) "\n```")
+              "### All-time Scores"
+              (str "```\n" (wordle-leaderboard) "\n```")
+              "## Chess"
+              "2 points for a win, 1 point for a tie."
+              (str "```\n" (chess-leaderboard) "\n```")
+              "=> / Back"])
    (r/success-response r/gemtext)))
