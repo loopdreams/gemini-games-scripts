@@ -24,7 +24,9 @@
 (defn draw-leaderboard [data]
   (let [entries       (for [entry data]
                         [(:name entry) (:score entry)])
-        name-col-len  (inc (last (sort (map (comp count :name) data))))
+        name-col-len  (if (seq data)
+                        (inc (last (sort (map (comp count :name) data))))
+                        (inc (count (first header))))
         score-col-len (inc (count (last header)))
         divider-name  (apply str (repeat name-col-len "-"))
         divider-score (apply str (repeat score-col-len "-"))]
