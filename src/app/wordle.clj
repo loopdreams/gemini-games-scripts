@@ -157,7 +157,7 @@
                            draw-board)
         keyboard-state (-> (or (db/get-keyboard req) default-letters)
                            keyboard)
-        guess-count    (- (inc guess-limit) (db/get-score req))
+        guess-count    (- (inc guess-limit) (or (db/get-score req) 0))
         win-condition  (db/win-condition req)
         daily-word     word-of-the-day]
     (->>
