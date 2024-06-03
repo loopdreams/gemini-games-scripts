@@ -893,10 +893,7 @@
         :else (-> boardstate get-board-state draw-board))
       "\n```"
       break
-      (cond
-        (= complete 1) "Checkmate!"
-        (= checkstate 1) "Check!"
-        :else "")
+      (when (and (= checkstate 1) (not= complete 1)) "Check!")
       break
       (cond
         (and (or (not whiteID)
