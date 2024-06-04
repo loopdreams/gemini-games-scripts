@@ -20,15 +20,13 @@ Note June 2024: This is a new area and can be considered a work in progress. I c
 ## Info
 
 ### Client Certificates
-You will need a client certificate to interact with the games here. Client certificates are like an 'ID' for recognising a user.
-
-They can be simple enough to generate manually, for example by using solderpunk's 'gemcert', but clients like Lagrange also make this process very easy/intuitive.
+You will need a client certificate to interact with the games here. They can be simple enough to generate manually, for example by using solderpunk's 'gemcert', but clients like Lagrange also make this process very easy/intuitive.
 
 => https://git.sr.ht/~solderpunk/gemcert Gemcert on sourcehut
 => https://gmi.skyjake.fi/lagrange/ Lagrange
 
 ### Source
-=> src/app/about Server Info & source code
+=> src/app/about Server info & source code
 
 ### Issues
 If you encounter any issues you can contact me at the address listed here:
@@ -43,6 +41,7 @@ I'm sure I'm missing a lot (do let me know!)
 => gemini://tilde.cafe/~spellbinding/wordo/cgi? Wordo
 => gemini://gemini.smallweb.space/farkle/ Farkle
 => gemini://gemi.dev/cgi-bin/witw.cgi/ Where in the world?
+=> gemini://gemi.dev/cgi-bin/mines.cgi/ Minesweeper
 => gemini://gemini.thegonz.net/wsq/  Wordsquirreler
 => gemini://gemini.thegonz.net/wt/ Wordtunneler
 => gemini://gemini.thegonz.net/gemski/ Gemski

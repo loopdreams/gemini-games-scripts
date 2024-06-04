@@ -840,7 +840,8 @@
           (= drawstatus 2)                 (str "Game tied!")
           (= resignstatus 1)               (str (user (if (= winner "white") blackID whiteID)) " resigned. "
                                                 (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
-          (= complete 1)                   (str (user (if (= winner "white") whiteID blackID)) " (" winner ") has won!")
+          (= complete 1)                   (str "Checkmate! " ;; If game is complete and not tied or resigned, must be checkmate
+                                                (user (if (= winner "white") whiteID blackID)) " (" winner ") has won the game.")
           (not= playerturn user-colour)    (str (str/capitalize playerturn) "'s turn.")
           :else
           (str
@@ -850,8 +851,6 @@
            "\n=> " root "/draw-offer/" gameid " Offer draw"
            "\n=> " root "/resign/"     gameid " Resign game"))))))
 
-
-        
 (defn game-page [req gameid board-orientation]
   (let [game-data (first (db/get-gameinfo gameid))
         gamemoves (:chessgames/gamemoves game-data)
