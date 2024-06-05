@@ -438,6 +438,9 @@
        (or (re-find #"\d" (str (last input)))
            (re-find #"[qkbrn]" (str/lower-case (last input))))))
 
+(defn valid-input-piece-move? [piece-input]
+  (re-find #"[qkbrnpQKBRNP]" (str (first piece-input))))
+
 (defn rank-file->coords [[rank file]]
   [(- (int rank) 97) (- 8 (- (int file) 48))])
 
@@ -527,14 +530,16 @@
 
             ;; piece move, e.g., 'Nf3'
             (= 3 (count input))
-            (let [to     (rank-file->coords (subs input 1 3))
-                  update (fn [piece] (-> (assoc move :piece piece)
-                                         (assoc :to to)))]
-              (construct-move-from (update (lookup-piece (first input)))))
+            (when (valid-input-piece-move? input)
+              (let [to     (rank-file->coords (subs input 1 3))
+                    update (fn [piece] (-> (assoc move :piece piece)
+                                           (assoc :to to)))]
+                (construct-move-from (update (lookup-piece (first input))))))
 
             ;; piece move capture, e.g., 'Nxf3'
             (and (= 4 (count input)) (= "x" (str/lower-case (second input))))
-            (parse-input (assoc move :input (str (subs input 0 1) (subs input 2))))
+            (when (valid-input-piece-move? input)
+              (parse-input (assoc move :input (str (subs input 0 1) (subs input 2)))))
 
             ;; long algebraic notation, e.g., 'e2e4'
             (= 4 (count input))
@@ -549,11 +554,13 @@
 
             ;; long notation piece, e.g., 'Rd3d7'
             (= 5 (count input))
-            (parse-input (-> (assoc move :piece (lookup-piece (first input))) (assoc :input (str (rest input)))))
+            (when (valid-input-piece-move? input)
+              (parse-input (-> (assoc move :piece (lookup-piece (first input))) (assoc :input (str (rest input))))))
 
             ;; long notation piece capture, e.g., 'Rd3xd7'
             (and (= 6 (count input)) (= "x" (str/lower-case (nth input 3))))
-            (parse-input (assoc move :input (str (subs input 0 3) (subs input 4))))
+            (when (valid-input-piece-move? input)
+              (parse-input (assoc move :input (str (subs input 0 3) (subs input 4)))))
             :else nil)))))
 
 
