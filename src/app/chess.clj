@@ -257,6 +257,7 @@
      (cond
        (= blank-marker (lookup to)) (or (= [x1 (direction y1 1)] to)
                                         (and (starting-points from)
+                                             (= blank-marker (lookup [x1 (direction y1 1)]))
                                              (= [x1 (direction y1 2)] to)))
         
        (opponent-pieces (lookup to)) (or (= [(dec x1) (direction y1 1)] to)
