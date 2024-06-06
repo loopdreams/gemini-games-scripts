@@ -1,7 +1,5 @@
 # Gemini Games
 
-Note June 2024: This is a new area and can be considered a work in progress. I can't guarentee things work 100%! Report any issues to the email address listed in the Info section below.
-
 ## General
 
 => src/app/user User Page (Register Name & View History)
@@ -36,6 +34,7 @@ If you encounter any issues you can contact me at the address listed here:
 
 I'm sure I'm missing a lot (do let me know!)
 
+=> gemini://jsreed5.org/chess/index.gmi Chess (Rob's Gemini Capsule )
 => gemini://tilde.cafe/~stack/DicePoker/live/poker? Dice Poker
 => gemini://tilde.cafe/~spellbinding/game/cgi? Spellbinding
 => gemini://tilde.cafe/~spellbinding/wordo/cgi? Wordo

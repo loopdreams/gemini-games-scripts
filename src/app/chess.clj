@@ -507,7 +507,6 @@
     "OOO" :queenside))
 
 ;; TODO handle this input 'dxe4' - this is a pawn capturing e4 when there are two pawns (using rank to disambiguate), caused error on input.
-;; TODO hanlde an incorrect input like c3456, which tries to match 'c'
 (defn parse-input [{:keys [input gameid] :as move}]
   (let [input (str/replace input #"[^a-zA-Z\d]" "")]
     (if (castling? input) (-> (assoc move :castling (castling-side input))
