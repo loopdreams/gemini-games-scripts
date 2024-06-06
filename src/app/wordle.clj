@@ -32,14 +32,20 @@
 
 
 (defn time-until-next-word []
-  (let [[hrs mins :as x] (map parse-long
-                              (-> (jt/format "HH mm" (jt/local-date-time))
-                                  (str/split #" ")))]
-    (if (> mins 0)
-      (let [mins-remaining (- 60 mins)
-            hrs-remaining (- 24 (inc hrs))]
-        (str "- " hrs-remaining ":" mins-remaining " until next word."))
-      (str "- " (- 24 hrs) " until next word."))))
+  (let [[hrs mins]     (map parse-long
+                            (-> (jt/format "HH mm" (jt/local-date-time))
+                                (str/split #" ")))
+        mins-remaining (- 60 mins)
+        hrs-remaining  (- 24 (inc hrs))]
+    (cond
+      (= mins-remaining 0) (str hrs-remaining " hours until next word.")
+      (= hrs-remaining 0) (str mins-remaining " minutes until next word.")
+      :else (str hrs-remaining
+                 (if (= hrs-remaining 1) " hour" " hours")
+                 " and "
+                 mins-remaining
+                 (if (= mins-remaining 1) " minute" " minutes")
+                 " until next word."))))
 
 ;; Helper Functions
 (defn path-link [name label]
