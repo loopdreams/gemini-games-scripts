@@ -34,7 +34,7 @@
       ["# Flight Info"
        (str "=> " root " Flights")
        (str "=> " root "/query New Query")
-       "```"
+       "``` Flight info"
        msg
        "```"])
      (r/success-response r/gemtext))))

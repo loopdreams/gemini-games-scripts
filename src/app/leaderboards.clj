@@ -52,11 +52,11 @@
               "## Wordle"
               "Score is based on number of guesses taken. For example, guessing on the first try = 6 points, on the second = 5, and so on."
               "### Daily Scores"
-              (str "```\n" (wordle-daily-leaderboard) "\n```")
+              (str "``` wordle daily leaderboard\n" (wordle-daily-leaderboard) "\n```")
               "### All-time Scores"
-              (str "```\n" (wordle-leaderboard) "\n```")
+              (str "``` wordle leaderboard\n" (wordle-leaderboard) "\n```")
               "## Chess"
               "2 points for a win, 1 point for a tie."
-              (str "```\n" (chess-leaderboard) "\n```")
+              (str "``` chess leaderboard\n" (chess-leaderboard) "\n```")
               "=> / Back"])
    (r/success-response r/gemtext)))

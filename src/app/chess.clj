@@ -791,7 +791,7 @@
 (defn game-page-board [game-data req board-orientation]
   (let [{:chessgames/keys [boardstate blackID checkstate complete]} game-data
         uid (db/client-id req)
-        pre-formatted (fn [s] (str "```\n" s (when (and (= checkstate 1) (not= complete 1)) "\n\nCheck!") "\n```"))]
+        pre-formatted (fn [s] (str "``` chess game board\n" s (when (and (= checkstate 1) (not= complete 1)) "\n\nCheck!") "\n```"))]
     (if (or (and (= uid blackID) (not= board-orientation "default"))
             (= board-orientation "rotate"))
       (-> boardstate get-board-state rotate-board (draw-board :rotate) pre-formatted)
@@ -888,7 +888,7 @@
       (str "=> " root "/playback/" gameid "/" (dec move)" Previous Move")
       (str "=> " root "/playback/" gameid "/" (inc move)" Next Move")
       (str "=> " root "/playback/" gameid "/1 First Move")
-      "```"
+      "``` chess game board"
       (-> boardstate (get-board-state move) draw-board)
       "```"
       "## PGN Data for Game"

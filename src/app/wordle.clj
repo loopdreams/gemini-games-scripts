@@ -184,7 +184,7 @@
           :else (path-link "guess" "Make a guess")))
 
       break
-      "```\n"
+      "``` wordle game board\n"
       keyboard-state
       break
       board
