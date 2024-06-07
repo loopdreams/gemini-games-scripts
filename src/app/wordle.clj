@@ -62,17 +62,22 @@
 (defn validate-word [guess]
   (@db/valid-words (str/lower-case guess)))
 
+(def correct-letter-position "●")
+(def correct-letter "○")
+(def incorrect-letter "-")
+
+
 (defn winner? [guesses]
   (when (seq guesses)
     (->>
      (last (str/split guesses #":"))
-     (every? #{\x}))))
+     (every? #{(first (seq correct-letter-position))}))))
 
 (defn calc-matches [word guess]
   (let [wd            (seq word)
         gs            (seq (str/lower-case guess))
         intersections (set/intersection (set wd) (set gs))
-        positions     (mapv #(if (= %1 %2) "x" "-") wd gs)
+        positions     (mapv #(if (= %1 %2) correct-letter-position incorrect-letter) wd gs)
         checked       (->> (partition 2 (interleave wd gs))
                            (filter (fn [[a b]] (= a b)))
                            (map first)
@@ -83,7 +88,7 @@
       (if-not g
         result
         (if (and (intersections g) (not (checked g)))
-          (recur gss (assoc result count "o") (inc count))
+          (recur gss (assoc result count correct-letter) (inc count))
           (recur gss result (inc count)))))))
 
 (defn incorrect-letters [word guess]
@@ -147,7 +152,11 @@
   (let [frames "-------------------"]
     (str/join "\n"
               [frames
-               (str/join "\n" (interleave board (repeat frames)))])))
+               (str/join "\n" (interleave board (repeat frames)))
+               "\nKey:"
+               (str correct-letter-position " Letter is correct and in the right position")
+               (str correct-letter " Word contains this letter, but it is in the wrong position")
+               (str incorrect-letter " Word does not contain this letter")])))
 
 
 ;; Page
