@@ -48,3 +48,4 @@ I'm sure I'm missing a lot (do let me know!)
 => gemini://gemini.thegonz.net/zyg/ Zyg
 => gemini://gemini.thegonz.net/gemgrave/ Gemgrave
 => gemini://gemini.thegonz.net/eindeutigkeit/ Metapuzzle
+=> gemini://cthulhu28.space/ Ranger Center "Union"
