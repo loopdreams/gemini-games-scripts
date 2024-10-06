@@ -73,23 +73,47 @@
      (last (str/split guesses #":"))
      (every? #{(first (seq correct-letter-position))}))))
 
+(defn remove-one [lst to-remove]
+  (let [[x y] (split-with (partial not= to-remove) lst)]
+    (concat x (rest y))))
+
 (defn calc-matches [word guess]
-  (let [wd            (seq word)
-        gs            (seq (str/lower-case guess))
-        intersections (set/intersection (set wd) (set gs))
-        positions     (mapv #(if (= %1 %2) correct-letter-position incorrect-letter) wd gs)
-        checked       (->> (partition 2 (interleave wd gs))
-                           (filter (fn [[a b]] (= a b)))
-                           (map first)
-                           (into #{}))]
-    (loop [[g & gss] gs
-           result    positions
-           count     0]
-      (if-not g
-        result
-        (if (and (intersections g) (not (checked g)))
-          (recur gss (assoc result count correct-letter) (inc count))
-          (recur gss result (inc count)))))))
+  (let [wd (seq word)
+        gs (seq (str/lower-case guess))]
+    (loop [letters     (map-indexed vector gs)
+           result      []
+           take-ltrs   wd
+           cor-pos-idx []
+           pass        0]
+      (if (zero? pass)
+        ;; First pass checking for letters in correct position
+        (if (empty? letters)
+          (recur (map-indexed vector gs) result take-ltrs cor-pos-idx (inc pass))
+          (let [[idx ltr] (first letters)]
+            (if (= ltr (nth wd idx))
+              (recur (rest letters)
+                     (conj result correct-letter-position)
+                     (remove-one take-ltrs ltr)
+                     (conj cor-pos-idx idx)
+                     pass)
+              (recur (rest letters)
+                     (conj result incorrect-letter)
+                     take-ltrs
+                     cor-pos-idx
+                     pass))))
+        ;; Second pass checking for letters that are correct but in the wrong position
+        (if (empty? letters)
+          result
+          (let [[idx ltr] (first letters)]
+            (if (and (some #{ltr} wd)
+                     (some #{ltr} take-ltrs)
+                     (not (some #{idx} cor-pos-idx)))
+              (recur (rest letters)
+                     (assoc result idx correct-letter)
+                     (remove-one take-ltrs ltr)
+                     cor-pos-idx
+                     pass)
+              (recur (rest letters) result take-ltrs cor-pos-idx pass))))))))
 
 (defn incorrect-letters [word guess]
   (mapv str (set/difference (set guess) (set word))))
@@ -128,7 +152,7 @@
 
           (do (store-guess req (:query req))
               {:status 30 :meta root})))
-        
+
       {:status 10 :meta "Enter guess"})))
 
 ;; Game Board
