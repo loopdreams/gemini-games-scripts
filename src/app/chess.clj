@@ -259,7 +259,7 @@
                                         (and (starting-points from)
                                              (= blank-marker (lookup [x1 (direction y1 1)]))
                                              (= [x1 (direction y1 2)] to)))
-        
+
        (opponent-pieces (lookup to)) (or (= [(dec x1) (direction y1 1)] to)
                                          (= [(inc x1) (direction y1 1)] to))
        :else                         false))))
@@ -726,7 +726,7 @@
      "=> " root "/game/" (:chessgames/gameid game-info) " View Game")))
 
 (defn active-games [req]
-  (let [{:keys [player-games open-games running-games]} (db/get-active-games req)
+  (let [{:keys [player-games open-games running-games completed-games]} (db/get-active-games req)
         game-list (fn [games]
                     (if-not (seq games)
                       (str "Nothing here yet.")
@@ -742,7 +742,9 @@
       "## Open Games"
       (game-list open-games)
       "## Running Games"
-      (game-list running-games)]
+      (game-list running-games)
+      "## Completed Games"
+      (game-list completed-games)]
      (str/join break)
      (r/success-response r/gemtext))))
 
