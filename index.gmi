@@ -13,6 +13,7 @@
 
 ## Other Services
 
+=> src/app/discover Visit Random Gemini Capsules
 => src/app/flights Flights
 
 ## Info
