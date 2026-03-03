@@ -414,10 +414,21 @@
            (when-not (move-out-of-check? board possible-positions p turn)
              checkmate)))))))
 
+(defn validate-move-extra-checks [{:keys [piece] :as move}]
+  ((case piece
+     :king   valid-move-K
+     :queen  valid-move-Q
+     :bishop valid-move-B
+     :rook   valid-move-R
+     :knight valid-move-N
+     :pawn   valid-move-P)
+   move))
+
 ;; TODO further validation of castling needed?
 (defn validate-move [m]
   (if-not (:castling m)
     (and m
+         (validate-move-extra-checks m)
          (valid-to m)
          (valid-from m)
          (not (move-creates-check? m)))
